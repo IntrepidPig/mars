@@ -2,6 +2,7 @@ use thiserror::Error;
 
 use rk::{
 	ash::extensions,
+	command::CommandPool,
 	device::{Device, Queue},
 	instance::Instance,
 	PhysicalDevice, PhysicalDeviceChooser,
@@ -14,6 +15,7 @@ pub use rk::ash::vk;
 
 pub mod buffer;
 pub mod function;
+pub mod image;
 pub mod math;
 pub mod pass;
 pub mod render;
@@ -27,6 +29,7 @@ pub struct Context {
 	pub(crate) physical_device: PhysicalDevice,
 	pub(crate) device: Device,
 	pub(crate) queue: Queue,
+	pub(crate) command_pool: CommandPool,
 }
 
 impl Context {
@@ -34,13 +37,15 @@ impl Context {
 		let instance = create_instance(app_name)?;
 		let physical_device =
 			rk::PhysicalDevice::choose(&instance, chooser).map_err(|_| ContextCreateError::NoDevice)?;
-		let (device, queue) = create_device(&physical_device)?;
+		let (mut device, queue) = create_device(&physical_device)?;
+		let command_pool = device.create_command_pool()?;
 
 		Ok(Self {
 			instance,
 			physical_device,
 			device,
 			queue,
+			command_pool,
 		})
 	}
 }

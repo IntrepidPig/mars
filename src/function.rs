@@ -1,8 +1,11 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::Arc};
 
 use rk::vk;
 
-use crate::buffer::{Buffer, UniformBufferUsage, UntypedBuffer};
+use crate::{
+	buffer::{Buffer, UniformBufferUsage, UntypedBuffer},
+	image::{FormatType, SampledImage},
+};
 
 pub trait FunctionDef {
 	type VertexInput: Parameter;
@@ -38,12 +41,16 @@ pub struct AttributeDesc {
 
 #[derive(Debug, Copy, Clone)]
 pub enum AttributeFormat {
+	Vec2F,
+	Vec3F,
 	Vec4F,
 }
 
 impl AttributeFormat {
 	fn size(self) -> u32 {
 		match self {
+			AttributeFormat::Vec2F => 4 * 2,
+			AttributeFormat::Vec3F => 4 * 3,
 			AttributeFormat::Vec4F => 4 * 4,
 		}
 	}
@@ -52,6 +59,8 @@ impl AttributeFormat {
 impl From<AttributeFormat> for vk::Format {
 	fn from(t: AttributeFormat) -> Self {
 		match t {
+			AttributeFormat::Vec2F => vk::Format::R32G32_SFLOAT,
+			AttributeFormat::Vec3F => vk::Format::R32G32B32_SFLOAT,
 			AttributeFormat::Vec4F => vk::Format::R32G32B32A32_SFLOAT,
 		}
 	}
@@ -132,12 +141,14 @@ where
 #[derive(Debug, Copy, Clone)]
 pub enum BindingType {
 	Uniform,
+	SampledImage,
 }
 
 impl From<BindingType> for vk::DescriptorType {
 	fn from(t: BindingType) -> Self {
 		match t {
 			BindingType::Uniform => vk::DescriptorType::UNIFORM_BUFFER,
+			BindingType::SampledImage => vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
 		}
 	}
 }
@@ -151,6 +162,17 @@ pub unsafe trait Binding {
 	type Argument: Argument;
 
 	fn description() -> BindingDesc;
+}
+
+unsafe impl<F: FormatType> Binding for SampledImage<F> {
+	type Argument = Self;
+
+	fn description() -> BindingDesc {
+		BindingDesc {
+			binding_type: BindingType::SampledImage,
+			count: 1,
+		}
+	}
 }
 
 pub unsafe trait Bindings {
@@ -218,6 +240,19 @@ where
 	}
 }
 
+impl<F> Argument for SampledImage<F>
+where
+	F: FormatType,
+{
+	fn as_write(&self) -> WriteArgument {
+		WriteArgument::SampledImage(WriteSampledImageArgument {
+			sampler: self.sampler.sampler.clone(),
+			image_view: self.image_view.image_view.clone(),
+			image_layout: self.image.layout,
+		})
+	}
+}
+
 pub trait Arguments {
 	fn as_writes(&self) -> Vec<WriteArgument>;
 }
@@ -260,19 +295,26 @@ where
 
 pub enum WriteArgument<'a> {
 	Uniform(WriteUniformArgument<'a>),
-	//Sampled
+	SampledImage(WriteSampledImageArgument),
 }
 
 impl<'a> WriteArgument<'a> {
 	fn descriptor_type(&self) -> vk::DescriptorType {
 		match *self {
 			WriteArgument::Uniform(_) => vk::DescriptorType::UNIFORM_BUFFER,
+			WriteArgument::SampledImage(_) => vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
 		}
 	}
 }
 
 pub struct WriteUniformArgument<'a> {
 	buffer: UntypedBuffer<'a, UniformBufferUsage>,
+}
+
+pub struct WriteSampledImageArgument {
+	sampler: Arc<rk::image::SamplerInner>,
+	image_view: Arc<rk::image::ImageViewInner>,
+	image_layout: vk::ImageLayout,
 }
 
 pub(crate) fn parameter_descs_to_raw(
@@ -326,6 +368,7 @@ pub(crate) fn bindings_descs_to_raw(bindings: &[BindingDesc]) -> Vec<vk::Descrip
 
 pub enum WriteBacking {
 	Buffer(Vec<vk::DescriptorBufferInfo>),
+	Image(Vec<vk::DescriptorImageInfo>),
 }
 
 pub(crate) fn writes_to_raw(
@@ -355,6 +398,19 @@ pub(crate) fn writes_to_raw(
 					unreachable!()
 				})
 			}
+			WriteArgument::SampledImage(write) => {
+				let image_info = vk::DescriptorImageInfo {
+					sampler: **write.sampler,
+					image_view: **write.image_view,
+					image_layout: write.image_layout,
+				};
+				backing.push(WriteBacking::Image(vec![image_info]));
+				builder.image_info(if let WriteBacking::Image(image) = backing.last().unwrap() {
+					&image
+				} else {
+					unreachable!()
+				})
+			}
 		};
 		raw_writes.push(builder.build());
 	}
@@ -368,6 +424,22 @@ mod nalgebra {
 		buffer::{Buffer, UniformBufferUsage},
 		math::*,
 	};
+
+	unsafe impl Parameter for Vec2 {
+		fn attributes() -> Vec<AttributeDesc> {
+			vec![AttributeDesc {
+				format: AttributeFormat::Vec2F,
+			}]
+		}
+	}
+
+	unsafe impl Parameter for Vec3 {
+		fn attributes() -> Vec<AttributeDesc> {
+			vec![AttributeDesc {
+				format: AttributeFormat::Vec3F,
+			}]
+		}
+	}
 
 	unsafe impl Parameter for Vec4 {
 		fn attributes() -> Vec<AttributeDesc> {

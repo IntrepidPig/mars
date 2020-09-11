@@ -8,8 +8,6 @@ use rk::{buffer::Buffer as RkBuffer, vk};
 
 use crate::{Context, MarsResult};
 
-pub enum Anonymous {}
-
 pub trait BufferUsageType {
 	fn as_raw() -> vk::BufferUsageFlags;
 }
@@ -153,26 +151,19 @@ pub struct UntypedBuffer<'a, U: BufferUsageType> {
 	pub(crate) buffer: &'a Buffer<U, ()>,
 }
 
-pub struct VertexBufferUsage;
+macro_rules! buffer_usage {
+	($name:ident, $usage:ident) => {
+		pub struct $name;
 
-impl BufferUsageType for VertexBufferUsage {
-	fn as_raw() -> vk::BufferUsageFlags {
-		vk::BufferUsageFlags::VERTEX_BUFFER
-	}
+		impl BufferUsageType for $name {
+			fn as_raw() -> vk::BufferUsageFlags {
+				vk::BufferUsageFlags::$usage
+			}
+		}
+	};
 }
 
-pub struct IndexBufferUsage;
-
-impl BufferUsageType for IndexBufferUsage {
-	fn as_raw() -> vk::BufferUsageFlags {
-		vk::BufferUsageFlags::INDEX_BUFFER
-	}
-}
-
-pub struct UniformBufferUsage;
-
-impl BufferUsageType for UniformBufferUsage {
-	fn as_raw() -> vk::BufferUsageFlags {
-		vk::BufferUsageFlags::UNIFORM_BUFFER
-	}
-}
+buffer_usage!(VertexBufferUsage, VERTEX_BUFFER);
+buffer_usage!(IndexBufferUsage, INDEX_BUFFER);
+buffer_usage!(UniformBufferUsage, UNIFORM_BUFFER);
+buffer_usage!(TransferSrcBufferUsage, TRANSFER_SRC);

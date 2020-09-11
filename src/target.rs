@@ -195,13 +195,20 @@ fn create_shader_module(device: &Device, spirv: &[u32]) -> ShaderModule {
 fn create_descriptor_pool(device: &mut Device, binding_descs: &[BindingDesc]) -> MarsResult<DescriptorPool> {
 	const MAX_SETS: u32 = 1024;
 	const PER_BINDING: u32 = 128;
-	let pool_sizes = binding_descs
+	let mut pool_sizes = binding_descs
 		.iter()
 		.map(|b| vk::DescriptorPoolSize {
 			ty: b.binding_type.into(),
 			descriptor_count: PER_BINDING,
 		})
 		.collect::<Vec<_>>();
+	if pool_sizes.is_empty() {
+		// Workaround for when there are no bindings because pool_sizes must have at least one element
+		pool_sizes.push(vk::DescriptorPoolSize {
+			ty: vk::DescriptorType::UNIFORM_BUFFER,
+			descriptor_count: 1,
+		})
+	}
 
 	let pool = device.create_descriptor_pool(MAX_SETS, &pool_sizes)?;
 	Ok(pool)
