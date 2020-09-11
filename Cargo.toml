@@ -1,0 +1,20 @@
+[package]
+name = "mars"
+version = "0.1.0"
+authors = ["Benny Aguilera <bennycaguilera@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rk = { path = "../rk" }
+nalgebra = "0.22.0"
+thiserror = "1.0.20"
+log = "0.4.11"
+shaderc = "0.6.2"
+raw-window-handle = "0.3.3"
+
+[dev-dependencies]
+fern = { version = "0.6.0", features = ["colored"] }
+winit = "0.22.2"
+nalgebra-glm = "0.8.0"
