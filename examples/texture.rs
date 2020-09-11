@@ -16,7 +16,7 @@ use winit::{
 	window::WindowBuilder,
 };
 
-const TRIANGLE_VERTEX_SHADER: &str = "
+const VERTEX_SHADER: &str = "
 #version 450
 
 layout(set = 0, binding = 0) uniform MVP {
@@ -34,7 +34,7 @@ void main() {
 }
 ";
 
-const TRIANGLE_FRAGMENT_SHADER: &str = "
+const FRAGMENT_SHADER: &str = "
 #version 450
 
 layout(set = 0, binding = 1) uniform sampler2D texSampler;
@@ -48,23 +48,21 @@ void main() {
 }
 ";
 
-struct TriangleFunction;
+struct TextureFunction;
 
-impl FunctionDef for TriangleFunction {
+impl FunctionDef for TextureFunction {
 	type VertexInput = (Vec2, Vec2);
 	type Bindings = (Mat4, SampledImage<image::R8G8B8A8SrgbFormat>);
 }
 
 fn main() {
-	setup_logging();
-
 	let event_loop = EventLoop::new();
 	let window = WindowBuilder::new().build(&event_loop).unwrap();
 
 	let mut context = Context::create("mars_triangle_example", rk::FirstPhysicalDeviceChooser).unwrap();
-	let vert_shader = compile_shader(TRIANGLE_VERTEX_SHADER, "vert.glsl", shaderc::ShaderKind::Vertex);
-	let frag_shader = compile_shader(TRIANGLE_FRAGMENT_SHADER, "frag.glsl", shaderc::ShaderKind::Fragment);
-	let function_shader = unsafe { FunctionShader::<TriangleFunction>::from_raw(vert_shader, frag_shader) };
+	let vert_shader = compile_shader(VERTEX_SHADER, "vert.glsl", shaderc::ShaderKind::Vertex);
+	let frag_shader = compile_shader(FRAGMENT_SHADER, "frag.glsl", shaderc::ShaderKind::Fragment);
+	let function_shader = unsafe { FunctionShader::<TextureFunction>::from_raw(vert_shader, frag_shader) };
 	let mut window_engine = WindowEngine::new(&mut context, &window, function_shader).unwrap();
 
 	let vertices = [
@@ -162,18 +160,4 @@ fn compile_shader(source: &str, filename: &str, kind: shaderc::ShaderKind) -> Ve
 		.compile_into_spirv(source, kind, filename, "main", None)
 		.expect("Failed to compile shader");
 	artifact.as_binary().to_owned()
-}
-
-fn setup_logging() {
-	let colors = Box::new(fern::colors::ColoredLevelConfig::new())
-		.info(fern::colors::Color::Blue)
-		.warn(fern::colors::Color::Yellow)
-		.error(fern::colors::Color::Red)
-		.debug(fern::colors::Color::BrightGreen);
-	fern::Dispatch::new()
-		.format(move |out, message, record| out.finish(format_args!("[{}] {}", colors.color(record.level()), message)))
-		.level(log::LevelFilter::Trace)
-		.chain(std::io::stderr())
-		.apply()
-		.expect("Failed to setup logging dispatch");
 }

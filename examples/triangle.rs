@@ -46,8 +46,6 @@ impl FunctionDef for TriangleFunction {
 }
 
 fn main() {
-	setup_logging();
-
 	let event_loop = EventLoop::new();
 	let window = WindowBuilder::new().build(&event_loop).unwrap();
 
@@ -94,18 +92,4 @@ fn compile_shader(source: &str, filename: &str, kind: shaderc::ShaderKind) -> Ve
 		.compile_into_spirv(source, kind, filename, "main", None)
 		.expect("Failed to compile shader");
 	artifact.as_binary().to_owned()
-}
-
-fn setup_logging() {
-	let colors = Box::new(fern::colors::ColoredLevelConfig::new())
-		.info(fern::colors::Color::Blue)
-		.warn(fern::colors::Color::Yellow)
-		.error(fern::colors::Color::Red)
-		.debug(fern::colors::Color::BrightGreen);
-	fern::Dispatch::new()
-		.format(move |out, message, record| out.finish(format_args!("[{}] {}", colors.color(record.level()), message)))
-		.level(log::LevelFilter::Trace)
-		.chain(std::io::stderr())
-		.apply()
-		.expect("Failed to setup logging dispatch");
 }

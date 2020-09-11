@@ -15,7 +15,6 @@ shaderc = "0.6.2"
 raw-window-handle = "0.3.3"
 
 [dev-dependencies]
-fern = { version = "0.6.0", features = ["colored"] }
 winit = "0.22.2"
 nalgebra-glm = "0.8.0"
 image = "0.23.9"
