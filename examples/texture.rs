@@ -72,11 +72,11 @@ fn main() {
 		(Vec2::new(-0.5, 0.5), Vec2::new(0.0, 1.0)),
 	];
 	let indices = [0, 1, 2, 2, 3, 0];
-	let vertex_buffer = Buffer::make_buffer(&mut context, &vertices).unwrap();
-	let index_buffer = Buffer::make_buffer(&mut context, &indices).unwrap();
+	let vertex_buffer = Buffer::make_array_buffer(&mut context, &vertices).unwrap();
+	let index_buffer = Buffer::make_array_buffer(&mut context, &indices).unwrap();
 
 	let mvp = Mat4::identity();
-	let mvp_buffer = Buffer::make_buffer(&mut context, &[mvp]).unwrap();
+	let mvp_buffer = Buffer::make_item_buffer(&mut context, mvp).unwrap();
 
 	let texture_data = load_image();
 	let image = Image::make_image(
@@ -105,7 +105,7 @@ fn main() {
 		set.arguments
 			.0
 			.with_map_mut(&mut context, |map| {
-				map[0] = create_mvp(aspect, Point3::new(0.0, 0.0, 0.0), Vec3::new(0.2, t, -0.2));
+				*map = create_mvp(aspect, Point3::new(0.0, 0.0, 0.0), Vec3::new(0.2, t, -0.2));
 			})
 			.unwrap();
 

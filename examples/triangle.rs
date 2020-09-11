@@ -61,8 +61,8 @@ fn main() {
 		(Vec4::new(0.5, 0.5, 0.0, 1.0), Vec4::new(0.0, 0.0, 1.0, 1.0)),
 	];
 	let indices = [0, 1, 2];
-	let vertex_buffer = Buffer::make_buffer(&mut context, &vertices).unwrap();
-	let index_buffer = Buffer::make_buffer(&mut context, &indices).unwrap();
+	let vertex_buffer = Buffer::make_array_buffer(&mut context, &vertices).unwrap();
+	let index_buffer = Buffer::make_array_buffer(&mut context, &indices).unwrap();
 	let set = window_engine.render.make_descriptor_set(&mut context, ()).unwrap();
 
 	event_loop.run(move |event, _, control_flow| {

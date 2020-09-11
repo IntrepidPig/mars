@@ -50,8 +50,8 @@ where
 		&mut self,
 		context: &mut Context,
 		set: &DescriptorSet<F::Bindings>,
-		vertices: &Buffer<VertexBufferUsage, F::VertexInput>,
-		indices: &Buffer<IndexBufferUsage, u32>,
+		vertices: &Buffer<VertexBufferUsage, [F::VertexInput]>,
+		indices: &Buffer<IndexBufferUsage, [u32]>,
 	) -> MarsResult<()> {
 		self.submit(context, |this, command_buffer| {
 			command_buffer.begin_render_pass(

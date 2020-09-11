@@ -13,6 +13,8 @@ use crate::{
 pub struct Image<U: ImageUsageType, F: FormatType> {
 	pub(crate) image: RkImage,
 	pub(crate) layout: vk::ImageLayout,
+	pub(crate) extent: vk::Extent2D,
+	pub(crate) usage: vk::ImageUsageFlags,
 	_phantom: PhantomData<(U, F)>,
 }
 
@@ -27,7 +29,7 @@ where
 		usage: vk::ImageUsageFlags,
 		format: vk::Format,
 	) -> MarsResult<Self> {
-		let extent = vk::Extent3D {
+		let extent3d = vk::Extent3D {
 			width: extent.width,
 			height: extent.height,
 			depth: 1,
@@ -35,7 +37,7 @@ where
 
 		let image = context.device.create_image(
 			format,
-			extent,
+			extent3d,
 			usage,
 			vk::ImageLayout::UNDEFINED,
 			vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -44,6 +46,8 @@ where
 		Ok(Self {
 			image,
 			layout: vk::ImageLayout::UNDEFINED,
+			extent,
+			usage,
 			_phantom: PhantomData,
 		})
 	}
@@ -67,7 +71,7 @@ where
 			},
 		)?;
 
-		let staging_buffer = Buffer::<TransferSrcBufferUsage, _>::make_buffer(context, data)?;
+		let staging_buffer = Buffer::<TransferSrcBufferUsage, _>::make_array_buffer(context, data)?;
 
 		unsafe {
 			context.device.copy_buffer_to_image(

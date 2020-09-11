@@ -68,23 +68,23 @@ fn main() {
 		(Vec4::new(0.0, 0.0, -0.5, 1.0), Vec4::new(1.0, 1.0, 1.0, 1.0)),
 	];
 	let indices = [0, 1, 2, 0, 1, 3, 1, 2, 3, 0, 2, 3];
-	let vertex_buffer = Buffer::make_buffer(&mut context, &vertices).unwrap();
-	let index_buffer = Buffer::make_buffer(&mut context, &indices).unwrap();
+	let vertex_buffer = Buffer::make_array_buffer(&mut context, &vertices).unwrap();
+	let index_buffer = Buffer::make_array_buffer(&mut context, &indices).unwrap();
 
 	let extent = window_engine.current_extent();
 	let aspect = extent.width as f32 / extent.height as f32;
-	let mvp_buffer_a = Buffer::<UniformBufferUsage, _>::make_buffer(
+	let mvp_buffer_a = Buffer::<UniformBufferUsage, _>::make_item_buffer(
 		&mut context,
-		&[create_mvp(
+		create_mvp(
 			aspect,
 			Point3::new(1.0, -1.5, 0.0),
 			Vec3::new(0.0, 0.0, 0.0),
-		)],
+		),
 	)
 	.unwrap();
-	let mvp_buffer_b = Buffer::<UniformBufferUsage, _>::make_buffer(
+	let mvp_buffer_b = Buffer::<UniformBufferUsage, _>::make_item_buffer(
 		&mut context,
-		&[create_mvp(aspect, Point3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 5.0, 0.0))],
+		create_mvp(aspect, Point3::new(0.0, 0.0, 0.0), Vec3::new(1.0, 5.0, 0.0)),
 	)
 	.unwrap();
 
@@ -108,14 +108,14 @@ fn main() {
 			.arguments
 			.0
 			.with_map_mut(&mut context, |map| {
-				map[0] = create_mvp(aspect, Point3::new(1.0, -1.5, 0.0), Vec3::new(0.0, 0.0, 0.0));
+				*map = create_mvp(aspect, Point3::new(1.0, -1.5, 0.0), Vec3::new(0.0, 0.0, 0.0));
 			})
 			.unwrap();
 		set_b
 			.arguments
 			.0
 			.with_map_mut(&mut context, |map| {
-				map[0] = create_mvp(aspect, Point3::new(0.0, 0.0, 0.0), Vec3::new(t, t, t));
+				*map = create_mvp(aspect, Point3::new(0.0, 0.0, 0.0), Vec3::new(t, t, t));
 			})
 			.unwrap();
 
