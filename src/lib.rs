@@ -1,10 +1,10 @@
-use thiserror::{Error};
+use thiserror::Error;
 
 use rk::{
-	ash::{extensions},
-	PhysicalDevice, PhysicalDeviceChooser,
-	instance::{Instance},
+	ash::extensions,
 	device::{Device, Queue},
+	instance::Instance,
+	PhysicalDevice, PhysicalDeviceChooser,
 };
 
 // Look at all these leaks
@@ -12,12 +12,12 @@ pub use rk;
 pub use rk::ash;
 pub use rk::ash::vk;
 
+pub mod buffer;
 pub mod function;
 pub mod math;
-pub mod target;
 pub mod pass;
 pub mod render;
-pub mod buffer;
+pub mod target;
 pub mod window;
 
 pub type MarsResult<T> = rk::VkResult<T>;
@@ -32,7 +32,8 @@ pub struct Context {
 impl Context {
 	pub fn create<C: PhysicalDeviceChooser>(app_name: &str, chooser: C) -> Result<Self, ContextCreateError> {
 		let instance = create_instance(app_name)?;
-		let physical_device = rk::PhysicalDevice::choose(&instance, chooser).map_err(|_| ContextCreateError::NoDevice)?;
+		let physical_device =
+			rk::PhysicalDevice::choose(&instance, chooser).map_err(|_| ContextCreateError::NoDevice)?;
 		let (device, queue) = create_device(&physical_device)?;
 
 		Ok(Self {
@@ -77,12 +78,12 @@ fn create_instance(app_name: &str) -> Result<Instance, ContextCreateError> {
 	)?;
 
 	/* let _ = rk::create_debug_report_callback(&instance, vk::DebugUtilsMessageSeverityFlagsEXT::all(), vk::DebugUtilsMessageTypeFlagsEXT::all(), None)
-		.map_err(|_| log::warn!("Failed to create debug report callback")); */
+	.map_err(|_| log::warn!("Failed to create debug report callback")); */
 
 	Ok(instance)
 }
 
-fn create_device(physical_device: &PhysicalDevice) -> Result<(Device, Queue), ContextCreateError>  {
+fn create_device(physical_device: &PhysicalDevice) -> Result<(Device, Queue), ContextCreateError> {
 	let queue_family_index = physical_device
 		.find_queue_family_index(vk::QueueFlags::GRAPHICS | vk::QueueFlags::TRANSFER)
 		.ok_or(ContextCreateError::NoQueue)?;

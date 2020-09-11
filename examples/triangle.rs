@@ -1,15 +1,15 @@
 use mars::{
-	Context,
+	buffer::Buffer,
 	function::{FunctionDef, FunctionShader},
-	window::{WindowEngine},
-	buffer::{Buffer},
 	math::*,
+	window::WindowEngine,
+	Context,
 };
 
 use winit::{
-	window::{WindowBuilder},
 	event::{Event, WindowEvent},
-	event_loop::{EventLoop, ControlFlow},
+	event_loop::{ControlFlow, EventLoop},
+	window::WindowBuilder,
 };
 
 const TRIANGLE_VERTEX_SHADER: &str = "
@@ -50,7 +50,7 @@ fn main() {
 
 	let event_loop = EventLoop::new();
 	let window = WindowBuilder::new().build(&event_loop).unwrap();
-	
+
 	let mut context = Context::create("mars_triangle_example", rk::FirstPhysicalDeviceChooser).unwrap();
 	let vert_shader = compile_shader(TRIANGLE_VERTEX_SHADER, "vert.glsl", shaderc::ShaderKind::Vertex);
 	let frag_shader = compile_shader(TRIANGLE_FRAGMENT_SHADER, "frag.glsl", shaderc::ShaderKind::Fragment);
@@ -66,22 +66,32 @@ fn main() {
 	let vertex_buffer = Buffer::make_buffer(&mut context, &vertices).unwrap();
 	let index_buffer = Buffer::make_buffer(&mut context, &indices).unwrap();
 	let set = window_engine.render.make_descriptor_set(&mut context, ()).unwrap();
-	
+
 	event_loop.run(move |event, _, control_flow| {
-		window_engine.render.clear(&mut context, Vec4::new(1.0, 1.0, 1.0, 1.0)).unwrap();
-		window_engine.render.draw(&mut context, &set, &vertex_buffer, &index_buffer).unwrap();
+		window_engine
+			.render
+			.clear(&mut context, Vec4::new(1.0, 1.0, 1.0, 1.0))
+			.unwrap();
+		window_engine
+			.render
+			.draw(&mut context, &set, &vertex_buffer, &index_buffer)
+			.unwrap();
 		window_engine.present(&mut context).unwrap();
 
 		match event {
-			Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => *control_flow = ControlFlow::Exit,
-			_ => {},
+			Event::WindowEvent {
+				event: WindowEvent::CloseRequested,
+				..
+			} => *control_flow = ControlFlow::Exit,
+			_ => {}
 		}
 	});
 }
 
 fn compile_shader(source: &str, filename: &str, kind: shaderc::ShaderKind) -> Vec<u32> {
 	let mut compiler = shaderc::Compiler::new().expect("Failed to initialize compiler");
-	let artifact = compiler.compile_into_spirv(source, kind, filename, "main", None)
+	let artifact = compiler
+		.compile_into_spirv(source, kind, filename, "main", None)
 		.expect("Failed to compile shader");
 	artifact.as_binary().to_owned()
 }

@@ -1,12 +1,8 @@
-use std::{
-	marker::PhantomData,
-};
+use std::marker::PhantomData;
 
-use rk::{vk};
+use rk::vk;
 
-use crate::{
-	buffer::{Buffer, UniformBufferUsage, UntypedBuffer},
-};
+use crate::buffer::{Buffer, UniformBufferUsage, UntypedBuffer};
 
 pub trait FunctionDef {
 	type VertexInput: Parameter;
@@ -19,7 +15,10 @@ pub struct FunctionShader<F: FunctionDef> {
 	pub(crate) _phantom: PhantomData<F>,
 }
 
-impl<F> FunctionShader<F> where F: FunctionDef {
+impl<F> FunctionShader<F>
+where
+	F: FunctionDef,
+{
 	pub unsafe fn from_raw(vert: Vec<u32>, frag: Vec<u32>) -> Self {
 		Self {
 			vert,
@@ -62,7 +61,11 @@ pub unsafe trait Parameter: Copy {
 	fn attributes() -> Vec<AttributeDesc>;
 }
 
-unsafe impl<A, B> Parameter for (A, B) where A: Parameter, B: Parameter {
+unsafe impl<A, B> Parameter for (A, B)
+where
+	A: Parameter,
+	B: Parameter,
+{
 	fn attributes() -> Vec<AttributeDesc> {
 		let mut a = A::attributes();
 		let mut b = B::attributes();
@@ -77,29 +80,51 @@ pub unsafe trait Parameters: Copy {
 	fn parameters() -> Vec<ParameterDesc>;
 }
 
-unsafe impl<A> Parameters for (A,) where A: Parameter {
+unsafe impl<A> Parameters for (A,)
+where
+	A: Parameter,
+{
+	fn parameters() -> Vec<ParameterDesc> {
+		vec![ParameterDesc {
+			attributes: A::attributes(),
+		}]
+	}
+}
+
+unsafe impl<A, B> Parameters for (A, B)
+where
+	A: Parameter,
+	B: Parameter,
+{
 	fn parameters() -> Vec<ParameterDesc> {
 		vec![
-			ParameterDesc { attributes: A::attributes() },
+			ParameterDesc {
+				attributes: A::attributes(),
+			},
+			ParameterDesc {
+				attributes: B::attributes(),
+			},
 		]
 	}
 }
 
-unsafe impl<A, B> Parameters for (A, B) where A: Parameter, B: Parameter {
+unsafe impl<A, B, C> Parameters for (A, B, C)
+where
+	A: Parameter,
+	B: Parameter,
+	C: Parameter,
+{
 	fn parameters() -> Vec<ParameterDesc> {
 		vec![
-			ParameterDesc { attributes: A::attributes() },
-			ParameterDesc { attributes: B::attributes() },
-		]
-	}
-}
-
-unsafe impl<A, B, C> Parameters for (A, B, C) where A: Parameter, B: Parameter, C: Parameter {
-	fn parameters() -> Vec<ParameterDesc> {
-		vec![
-			ParameterDesc { attributes: A::attributes() },
-			ParameterDesc { attributes: B::attributes() },
-			ParameterDesc { attributes: C::attributes() },
+			ParameterDesc {
+				attributes: A::attributes(),
+			},
+			ParameterDesc {
+				attributes: B::attributes(),
+			},
+			ParameterDesc {
+				attributes: C::attributes(),
+			},
 		]
 	}
 }
@@ -142,15 +167,22 @@ unsafe impl Bindings for () {
 	}
 }
 
-unsafe impl<A> Bindings for (A,) where A: Binding {
+unsafe impl<A> Bindings for (A,)
+where
+	A: Binding,
+{
 	type Arguments = (A::Argument,);
 
-    fn descriptions() -> Vec<BindingDesc> {
-        vec![A::description()]
-    }
+	fn descriptions() -> Vec<BindingDesc> {
+		vec![A::description()]
+	}
 }
 
-unsafe impl<A, B> Bindings for (A, B) where A: Binding, B: Binding {
+unsafe impl<A, B> Bindings for (A, B)
+where
+	A: Binding,
+	B: Binding,
+{
 	type Arguments = (A::Argument, B::Argument);
 
 	fn descriptions() -> Vec<BindingDesc> {
@@ -158,7 +190,12 @@ unsafe impl<A, B> Bindings for (A, B) where A: Binding, B: Binding {
 	}
 }
 
-unsafe impl<A, B, C> Bindings for (A, B, C) where A: Binding, B: Binding, C: Binding {
+unsafe impl<A, B, C> Bindings for (A, B, C)
+where
+	A: Binding,
+	B: Binding,
+	C: Binding,
+{
 	type Arguments = (A::Argument, B::Argument, C::Argument);
 
 	fn descriptions() -> Vec<BindingDesc> {
@@ -170,7 +207,10 @@ pub trait Argument {
 	fn as_write(&self) -> WriteArgument;
 }
 
-impl<T> Argument for Buffer<UniformBufferUsage, T> where T: Copy {
+impl<T> Argument for Buffer<UniformBufferUsage, T>
+where
+	T: Copy,
+{
 	fn as_write(&self) -> WriteArgument {
 		WriteArgument::Uniform(WriteUniformArgument {
 			buffer: self.as_untyped(),
@@ -188,19 +228,31 @@ impl Arguments for () {
 	}
 }
 
-impl<A> Arguments for (A,) where A: Argument {
+impl<A> Arguments for (A,)
+where
+	A: Argument,
+{
 	fn as_writes(&self) -> Vec<WriteArgument> {
 		vec![self.0.as_write()]
 	}
 }
 
-impl<A, B> Arguments for (A, B) where A: Argument, B: Argument {
+impl<A, B> Arguments for (A, B)
+where
+	A: Argument,
+	B: Argument,
+{
 	fn as_writes(&self) -> Vec<WriteArgument> {
 		vec![self.0.as_write(), self.1.as_write()]
 	}
 }
 
-impl<A, B, C> Arguments for (A, B, C) where A: Argument, B: Argument, C: Argument {
+impl<A, B, C> Arguments for (A, B, C)
+where
+	A: Argument,
+	B: Argument,
+	C: Argument,
+{
 	fn as_writes(&self) -> Vec<WriteArgument> {
 		vec![self.0.as_write(), self.1.as_write(), self.2.as_write()]
 	}
@@ -223,24 +275,29 @@ pub struct WriteUniformArgument<'a> {
 	buffer: UntypedBuffer<'a, UniformBufferUsage>,
 }
 
-pub(crate) fn parameter_descs_to_raw(parameters: &[ParameterDesc]) -> (Vec<vk::VertexInputBindingDescription>, Vec<vk::VertexInputAttributeDescription>) {
+pub(crate) fn parameter_descs_to_raw(
+	parameters: &[ParameterDesc],
+) -> (
+	Vec<vk::VertexInputBindingDescription>,
+	Vec<vk::VertexInputAttributeDescription>,
+) {
 	let mut bindings = Vec::new();
 	let mut attributes = Vec::new();
 
 	let mut location = 0;
 	for (i, parameter) in parameters.iter().enumerate() {
 		bindings.push(vk::VertexInputBindingDescription {
-		    binding: i as u32,
-		    stride: parameter.attributes.iter().map(|p| p.format.size()).sum(),
-		    input_rate: vk::VertexInputRate::VERTEX,
+			binding: i as u32,
+			stride: parameter.attributes.iter().map(|p| p.format.size()).sum(),
+			input_rate: vk::VertexInputRate::VERTEX,
 		});
 		let mut offset = 0;
 		for attribute in &parameter.attributes {
 			attributes.push(vk::VertexInputAttributeDescription {
-			    location,
-			    binding: i as u32,
-			    format: attribute.format.into(),
-			    offset,
+				location,
+				binding: i as u32,
+				format: attribute.format.into(),
+				offset,
 			});
 			location += 1;
 			offset += attribute.format.size();
@@ -254,12 +311,14 @@ pub(crate) fn bindings_descs_to_raw(bindings: &[BindingDesc]) -> Vec<vk::Descrip
 	let mut raw_bindings = Vec::new();
 
 	for (i, binding) in bindings.iter().enumerate() {
-		raw_bindings.push(vk::DescriptorSetLayoutBinding::builder()
-			.binding(i as u32)
-			.descriptor_type(binding.binding_type.into())
-			.descriptor_count(binding.count)
-			.stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
-			.build());
+		raw_bindings.push(
+			vk::DescriptorSetLayoutBinding::builder()
+				.binding(i as u32)
+				.descriptor_type(binding.binding_type.into())
+				.descriptor_count(binding.count)
+				.stage_flags(vk::ShaderStageFlags::VERTEX | vk::ShaderStageFlags::FRAGMENT)
+				.build(),
+		);
 	}
 
 	raw_bindings
@@ -269,7 +328,10 @@ pub enum WriteBacking {
 	Buffer(Vec<vk::DescriptorBufferInfo>),
 }
 
-pub(crate) fn writes_to_raw(set: vk::DescriptorSet, writes: &[WriteArgument]) -> (Vec<vk::WriteDescriptorSet>, Vec<WriteBacking>) {
+pub(crate) fn writes_to_raw(
+	set: vk::DescriptorSet,
+	writes: &[WriteArgument],
+) -> (Vec<vk::WriteDescriptorSet>, Vec<WriteBacking>) {
 	let mut raw_writes = Vec::new();
 	let mut backing = Vec::new();
 
@@ -292,7 +354,7 @@ pub(crate) fn writes_to_raw(set: vk::DescriptorSet, writes: &[WriteArgument]) ->
 				} else {
 					unreachable!()
 				})
-			},
+			}
 		};
 		raw_writes.push(builder.build());
 	}
@@ -301,22 +363,23 @@ pub(crate) fn writes_to_raw(set: vk::DescriptorSet, writes: &[WriteArgument]) ->
 }
 
 mod nalgebra {
-	use crate::{math::*, buffer::{Buffer, UniformBufferUsage}};
 	use super::*;
+	use crate::{
+		buffer::{Buffer, UniformBufferUsage},
+		math::*,
+	};
 
 	unsafe impl Parameter for Vec4 {
 		fn attributes() -> Vec<AttributeDesc> {
-			vec![
-				AttributeDesc {
-					format: AttributeFormat::Vec4F,
-				}
-			]
+			vec![AttributeDesc {
+				format: AttributeFormat::Vec4F,
+			}]
 		}
 	}
 
 	unsafe impl Binding for Mat4 {
 		type Argument = Buffer<UniformBufferUsage, Mat4>;
-		
+
 		fn description() -> BindingDesc {
 			BindingDesc {
 				binding_type: BindingType::Uniform,

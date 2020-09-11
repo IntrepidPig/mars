@@ -1,20 +1,18 @@
-use std::{
-	marker::{PhantomData},
-};
+use std::marker::PhantomData;
 
 use rk::{
-	vk,
-	device::{Device},
+	descriptor::DescriptorPool,
+	device::Device,
 	image::{Image, ImageView},
-	pipe::{Pipeline, DescriptorSetLayout, PipelineLayout},
-	shader::{ShaderModule},
-	descriptor::{DescriptorPool},
-	pass::{self, RenderPass, Framebuffer},
+	pass::{self, Framebuffer, RenderPass},
+	pipe::{DescriptorSetLayout, Pipeline, PipelineLayout},
+	shader::ShaderModule,
+	vk,
 };
 
 use crate::{
+	function::{self, BindingDesc, Bindings, FunctionDef, FunctionShader, Parameter, ParameterDesc},
 	Context, MarsResult,
-	function::{self, FunctionDef, Parameter, ParameterDesc, FunctionShader, Bindings, BindingDesc},
 };
 
 pub struct Target<F: FunctionDef> {
@@ -33,11 +31,16 @@ pub struct Target<F: FunctionDef> {
 	pub(crate) _phantom: PhantomData<F>,
 }
 
-impl<F> Target<F> where F: FunctionDef {
+impl<F> Target<F>
+where
+	F: FunctionDef,
+{
 	pub fn create(context: &mut Context, extent: vk::Extent2D, shader: FunctionShader<F>) -> MarsResult<Self> {
 		let mut render_pass = create_render_pass(&mut context.device);
 		//let parameters = F::VertexInputs::parameters();
-		let parameters = vec![ParameterDesc { attributes: F::VertexInput::attributes() }];
+		let parameters = vec![ParameterDesc {
+			attributes: F::VertexInput::attributes(),
+		}];
 		let (vertex_bindings, vertex_attributes) = function::parameter_descs_to_raw(&parameters);
 		let bindings = F::Bindings::descriptions();
 		let descriptor_pool = create_descriptor_pool(&mut context.device, &bindings)?;
@@ -66,9 +69,19 @@ impl<F> Target<F> where F: FunctionDef {
 		})
 	}
 
-	fn initialize(device: &mut Device, render_pass: &mut RenderPass, extent: vk::Extent2D) -> MarsResult<Initialization> {
+	fn initialize(
+		device: &mut Device,
+		render_pass: &mut RenderPass,
+		extent: vk::Extent2D,
+	) -> MarsResult<Initialization> {
 		let (color_image, depth_image, color_image_view, depth_image_view) = create_attachments(device, extent)?;
-		let framebuffer = device.create_framebuffer(render_pass, vec![color_image_view, depth_image_view], extent.width, extent.height, 1)?;
+		let framebuffer = device.create_framebuffer(
+			render_pass,
+			vec![color_image_view, depth_image_view],
+			extent.width,
+			extent.height,
+			1,
+		)?;
 		Ok(Initialization {
 			color_image,
 			depth_image,
@@ -98,9 +111,9 @@ fn create_attachments(device: &mut Device, extent: vk::Extent2D) -> MarsResult<(
 	let color_image = device.create_image(
 		vk::Format::B8G8R8A8_UNORM,
 		vk::Extent3D {
-		    width: extent.width,
-		    height: extent.height,
-		    depth: 1,
+			width: extent.width,
+			height: extent.height,
+			depth: 1,
 		},
 		vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::TRANSFER_DST,
 		vk::ImageLayout::UNDEFINED,
@@ -124,18 +137,16 @@ fn create_attachments(device: &mut Device, extent: vk::Extent2D) -> MarsResult<(
 
 fn create_render_pass(device: &mut Device) -> RenderPass {
 	let input_attachments = vec![];
-	let color_attachments = vec![
-		pass::ColorAttachment {
-			color: pass::AttachmentRef {
-				attachment: 0,
-				layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-			},
-			resolve: None,
+	let color_attachments = vec![pass::ColorAttachment {
+		color: pass::AttachmentRef {
+			attachment: 0,
+			layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
 		},
-	];
+		resolve: None,
+	}];
 	let depth_attachment = pass::AttachmentRef {
-	    attachment: 1,
-	    layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+		attachment: 1,
+		layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 	};
 
 	let subpass = device.create_subpass(input_attachments, color_attachments, Some(depth_attachment));
@@ -161,9 +172,10 @@ fn create_render_pass(device: &mut Device) -> RenderPass {
 		final_layout: vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 	};
 
-	let render_pass = device.create_render_pass(vec![color_attachment, depth_attachment], vec![subpass], vec![])
+	let render_pass = device
+		.create_render_pass(vec![color_attachment, depth_attachment], vec![subpass], vec![])
 		.expect("Failed to create render pass");
-	
+
 	render_pass
 }
 
@@ -175,18 +187,21 @@ fn create_render_pass(device: &mut Device) -> RenderPass {
 } */
 
 fn create_shader_module(device: &Device, spirv: &[u32]) -> ShaderModule {
-	device.create_shader_module_from_spirv(spirv).expect("Failed to create shader_module")
+	device
+		.create_shader_module_from_spirv(spirv)
+		.expect("Failed to create shader_module")
 }
 
 fn create_descriptor_pool(device: &mut Device, binding_descs: &[BindingDesc]) -> MarsResult<DescriptorPool> {
 	const MAX_SETS: u32 = 1024;
 	const PER_BINDING: u32 = 128;
-	let pool_sizes = binding_descs.iter().map(|b| {
-		vk::DescriptorPoolSize {
-		    ty: b.binding_type.into(),
-		    descriptor_count: PER_BINDING,	
-		}
-	}).collect::<Vec<_>>();
+	let pool_sizes = binding_descs
+		.iter()
+		.map(|b| vk::DescriptorPoolSize {
+			ty: b.binding_type.into(),
+			descriptor_count: PER_BINDING,
+		})
+		.collect::<Vec<_>>();
 
 	let pool = device.create_descriptor_pool(MAX_SETS, &pool_sizes)?;
 	Ok(pool)
@@ -205,18 +220,16 @@ fn create_pipeline(
 	let fragment_shader = create_shader_module(device, &frag_spirv);
 	let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
 		.logic_op_enable(false)
-		.attachments(&[
-			vk::PipelineColorBlendAttachmentState::builder()
-				.blend_enable(true)
-				.src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
-				.dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
-				.color_blend_op(vk::BlendOp::ADD)
-				.src_alpha_blend_factor(vk::BlendFactor::ONE)
-				.dst_alpha_blend_factor(vk::BlendFactor::ZERO)
-				.alpha_blend_op(vk::BlendOp::ADD)
-				.color_write_mask(vk::ColorComponentFlags::all())
-				.build()
-		])
+		.attachments(&[vk::PipelineColorBlendAttachmentState::builder()
+			.blend_enable(true)
+			.src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+			.dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+			.color_blend_op(vk::BlendOp::ADD)
+			.src_alpha_blend_factor(vk::BlendFactor::ONE)
+			.dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+			.alpha_blend_op(vk::BlendOp::ADD)
+			.color_write_mask(vk::ColorComponentFlags::all())
+			.build()])
 		.blend_constants([1.0, 1.0, 1.0, 1.0])
 		.build();
 	let descriptor_set_layout = device.create_descriptor_set_layout(&binding_descs)?;
@@ -229,7 +242,7 @@ fn create_pipeline(
 		&color_blend_state,
 		&pipeline_layout,
 		render_pass,
-		0
+		0,
 	)?;
 
 	Ok((pipeline, pipeline_layout, descriptor_set_layout))

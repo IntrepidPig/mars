@@ -1,15 +1,15 @@
 use rk::{
+	command::{CommandBuffer, CommandPool, Recording},
+	descriptor::DescriptorSet as RkDescriptorSet,
 	vk,
-	command::{CommandPool, CommandBuffer, Recording},
-	descriptor::{DescriptorSet as RkDescriptorSet},
 };
 
 use crate::{
-	Context, MarsResult,
-	function::{self, FunctionDef, Bindings, Arguments},
-	target::{Target},
-	buffer::{Buffer, VertexBufferUsage, IndexBufferUsage},
+	buffer::{Buffer, IndexBufferUsage, VertexBufferUsage},
+	function::{self, Arguments, Bindings, FunctionDef},
 	math::*,
+	target::Target,
+	Context, MarsResult,
 };
 
 pub struct RenderEngine<F: FunctionDef> {
@@ -17,30 +17,42 @@ pub struct RenderEngine<F: FunctionDef> {
 	pub(crate) command_pool: CommandPool,
 }
 
-impl<F> RenderEngine<F> where F: FunctionDef {
+impl<F> RenderEngine<F>
+where
+	F: FunctionDef,
+{
 	pub fn new(context: &mut Context, target: Target<F>) -> MarsResult<Self> {
 		let command_pool = context.device.create_command_pool()?;
 
-		let mut this = Self {
-			target,
-			command_pool,
-		};
+		let mut this = Self { target, command_pool };
 		this.clear(context, Vec4::new(0.0, 0.0, 0.0, 1.0))?;
 		Ok(this)
 	}
 
-	pub fn make_descriptor_set(&mut self, context: &mut Context, arguments: <F::Bindings as Bindings>::Arguments) -> MarsResult<DescriptorSet<F::Bindings>> {
-		let descriptor_set = context.device.allocate_descriptor_set(&self.target.descriptor_pool, &self.target.descriptor_set_layout)?;
+	pub fn make_descriptor_set(
+		&mut self,
+		context: &mut Context,
+		arguments: <F::Bindings as Bindings>::Arguments,
+	) -> MarsResult<DescriptorSet<F::Bindings>> {
+		let descriptor_set = context
+			.device
+			.allocate_descriptor_set(&self.target.descriptor_pool, &self.target.descriptor_set_layout)?;
 		let writes = arguments.as_writes();
 		let (raw_writes, _backing) = function::writes_to_raw(***descriptor_set, &writes);
 		unsafe { context.device.write_descriptor_set(&raw_writes)? };
 		Ok(DescriptorSet {
 			arguments,
-		    descriptor_set,
+			descriptor_set,
 		})
 	}
 
-	pub fn draw(&mut self, context: &mut Context, set: &DescriptorSet<F::Bindings>, vertices: &Buffer<VertexBufferUsage, F::VertexInput>, indices: &Buffer<IndexBufferUsage, u32>) -> MarsResult<()> {
+	pub fn draw(
+		&mut self,
+		context: &mut Context,
+		set: &DescriptorSet<F::Bindings>,
+		vertices: &Buffer<VertexBufferUsage, F::VertexInput>,
+		indices: &Buffer<IndexBufferUsage, u32>,
+	) -> MarsResult<()> {
 		self.submit(context, |this, command_buffer| {
 			command_buffer.begin_render_pass(
 				&mut this.target.render_pass,
@@ -50,8 +62,14 @@ impl<F> RenderEngine<F> where F: FunctionDef {
 					extent: this.target.extent,
 				},
 				&[
-					vk::ClearValue { color: vk::ClearColorValue { float32: [1.0, 1.0, 1.0, 1.0] } },
-					vk::ClearValue { depth_stencil: vk::ClearDepthStencilValue { depth: 0.0, stencil: 0, } },
+					vk::ClearValue {
+						color: vk::ClearColorValue {
+							float32: [1.0, 1.0, 1.0, 1.0],
+						},
+					},
+					vk::ClearValue {
+						depth_stencil: vk::ClearDepthStencilValue { depth: 0.0, stencil: 0 },
+					},
 				],
 			)?;
 			command_buffer.set_viewport(vk::Viewport {
@@ -63,10 +81,7 @@ impl<F> RenderEngine<F> where F: FunctionDef {
 				max_depth: 1.0,
 			});
 			command_buffer.set_scissor(vk::Rect2D {
-				offset: vk::Offset2D {
-					x: 0,
-					y: 0,
-				},
+				offset: vk::Offset2D { x: 0, y: 0 },
 				extent: vk::Extent2D {
 					width: this.target.extent.width,
 					height: this.target.extent.height,
@@ -86,19 +101,33 @@ impl<F> RenderEngine<F> where F: FunctionDef {
 	pub fn clear(&mut self, context: &mut Context, color: Vec4) -> MarsResult<()> {
 		let float32 = [color.x, color.y, color.z, color.w];
 		self.submit(context, |this, command_buffer| {
-			command_buffer.clear_color_image(&this.target.color_image, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, vk::ClearColorValue { float32 });
-			command_buffer.clear_depth_image(&this.target.depth_image, vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL, vk::ClearDepthStencilValue { depth: 1.0, stencil: 0 });
+			command_buffer.clear_color_image(
+				&this.target.color_image,
+				vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+				vk::ClearColorValue { float32 },
+			);
+			command_buffer.clear_depth_image(
+				&this.target.depth_image,
+				vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+				vk::ClearDepthStencilValue { depth: 1.0, stencil: 0 },
+			);
 			Ok(())
 		})
 	}
 
-	fn submit<R: FnOnce(&mut Self, &mut CommandBuffer<Recording>) -> MarsResult<()>>(&mut self, context: &mut Context, recording: R) -> MarsResult<()> {
+	fn submit<R: FnOnce(&mut Self, &mut CommandBuffer<Recording>) -> MarsResult<()>>(
+		&mut self,
+		context: &mut Context,
+		recording: R,
+	) -> MarsResult<()> {
 		let command_buffer = context.device.allocate_command_buffer(&self.command_pool)?;
 		let mut command_buffer = context.device.begin_command_buffer(command_buffer)?;
-		
+
 		recording(self, &mut command_buffer)?;
 		let command_buffer = context.device.end_command_buffer(command_buffer)?;
-		let command_buffer = context.device.queue_submit(&mut context.queue, command_buffer, &[], &[])?;
+		let command_buffer = context
+			.device
+			.queue_submit(&mut context.queue, command_buffer, &[], &[])?;
 		context.device.wait_command_buffer(command_buffer)?;
 
 		Ok(())

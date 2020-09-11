@@ -1,17 +1,12 @@
 use std::{
-	marker::{PhantomData},
+	marker::PhantomData,
 	ops::{Deref, DerefMut},
-	os::raw::{c_void},
+	os::raw::c_void,
 };
 
-use rk::{
-	vk,
-	buffer::{Buffer as RkBuffer},
-};
+use rk::{buffer::Buffer as RkBuffer, vk};
 
-use crate::{
-	Context, MarsResult,
-};
+use crate::{Context, MarsResult};
 
 pub enum Anonymous {}
 
@@ -26,7 +21,11 @@ pub struct Buffer<U: BufferUsageType, T: Copy> {
 	pub(crate) _phantom: PhantomData<(U, T)>,
 }
 
-impl<U, T> Buffer<U, T> where U: BufferUsageType, T: Copy {
+impl<U, T> Buffer<U, T>
+where
+	U: BufferUsageType,
+	T: Copy,
+{
 	pub fn make_buffer(context: &mut Context, data: &[T]) -> MarsResult<Self> {
 		let buffer = context.device.make_buffer(data, U::as_raw())?;
 		Ok(Self {
@@ -71,14 +70,12 @@ impl<U, T> Buffer<U, T> where U: BufferUsageType, T: Copy {
 
 	pub fn as_untyped(&self) -> UntypedBuffer<U> {
 		UntypedBuffer {
-			buffer: self.cast_ref::<()>()
+			buffer: self.cast_ref::<()>(),
 		}
 	}
 
 	fn cast_ref<V: Copy>(&self) -> &Buffer<U, V> {
-		unsafe {
-			std::mem::transmute(self)
-		}
+		unsafe { std::mem::transmute(self) }
 	}
 }
 
@@ -88,7 +85,11 @@ pub struct Map<'a, U: BufferUsageType, T: Copy> {
 	ptr: *const c_void,
 }
 
-impl<'a, U, T> Deref for Map<'a, U, T> where U: BufferUsageType, T: Copy {
+impl<'a, U, T> Deref for Map<'a, U, T>
+where
+	U: BufferUsageType,
+	T: Copy,
+{
 	type Target = [T];
 
 	fn deref(&self) -> &Self::Target {
@@ -96,7 +97,11 @@ impl<'a, U, T> Deref for Map<'a, U, T> where U: BufferUsageType, T: Copy {
 	}
 }
 
-impl<'a, U, T> Drop for Map<'a, U, T> where U: BufferUsageType, T: Copy {
+impl<'a, U, T> Drop for Map<'a, U, T>
+where
+	U: BufferUsageType,
+	T: Copy,
+{
 	fn drop(&mut self) {
 		unsafe {
 			self.context.device.unmap_buffer(&self.buffer.buffer);
@@ -110,7 +115,11 @@ pub struct MapMut<'a, U: BufferUsageType, T: Copy> {
 	ptr: *mut c_void,
 }
 
-impl<'a, U, T> Deref for MapMut<'a, U, T> where U: BufferUsageType, T: Copy {
+impl<'a, U, T> Deref for MapMut<'a, U, T>
+where
+	U: BufferUsageType,
+	T: Copy,
+{
 	type Target = [T];
 
 	fn deref(&self) -> &Self::Target {
@@ -118,13 +127,21 @@ impl<'a, U, T> Deref for MapMut<'a, U, T> where U: BufferUsageType, T: Copy {
 	}
 }
 
-impl<'a, U, T> DerefMut for MapMut<'a, U, T> where U: BufferUsageType, T: Copy {
+impl<'a, U, T> DerefMut for MapMut<'a, U, T>
+where
+	U: BufferUsageType,
+	T: Copy,
+{
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		unsafe { std::slice::from_raw_parts_mut(self.ptr as *mut _, self.buffer.len) }
 	}
 }
 
-impl<'a, U, T> Drop for MapMut<'a, U, T> where U: BufferUsageType, T: Copy {
+impl<'a, U, T> Drop for MapMut<'a, U, T>
+where
+	U: BufferUsageType,
+	T: Copy,
+{
 	fn drop(&mut self) {
 		unsafe {
 			self.context.device.unmap_buffer(&self.buffer.buffer);
