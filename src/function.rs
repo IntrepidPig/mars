@@ -449,8 +449,30 @@ mod nalgebra {
 		}
 	}
 
+	unsafe impl Binding for Vec3 {
+		type Argument = Buffer<UniformBufferUsage, Vec3>;
+
+		fn description() -> BindingDesc {
+			BindingDesc {
+				binding_type: BindingType::Uniform,
+				count: 1,
+			}
+		}
+	}
+
 	unsafe impl Binding for Mat4 {
 		type Argument = Buffer<UniformBufferUsage, Mat4>;
+
+		fn description() -> BindingDesc {
+			BindingDesc {
+				binding_type: BindingType::Uniform,
+				count: 1,
+			}
+		}
+	}
+
+	unsafe impl Binding for Mvp {
+		type Argument = Buffer<UniformBufferUsage, Mvp>;
 
 		fn description() -> BindingDesc {
 			BindingDesc {

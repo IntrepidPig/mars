@@ -19,9 +19,11 @@ use winit::{
 const VERTEX_SHADER: &str = "
 #version 450
 
-layout(set = 0, binding = 0) uniform MVP {
-	mat4 mvp;
-} mvp;
+layout(set = 0, binding = 0) uniform Mvp {
+	mat4 model;
+	mat4 view;
+	mat4 proj;
+} mvp; 
 
 layout(location = 0) in vec2 pos;
 layout(location = 1) in vec2 texCoord;
@@ -29,7 +31,7 @@ layout(location = 1) in vec2 texCoord;
 layout(location = 0) out vec2 texCoordOut;
 
 void main() {
-	gl_Position = mvp.mvp * vec4(pos.xy, 0.5, 1.0);
+	gl_Position = mvp.proj * mvp.view * mvp.model * vec4(pos.xy, 0.5, 1.0);
 	texCoordOut = texCoord;
 }
 ";
@@ -52,7 +54,7 @@ struct TextureFunction;
 
 impl FunctionDef for TextureFunction {
 	type VertexInput = (Vec2, Vec2);
-	type Bindings = (Mat4, SampledImage<image::R8G8B8A8SrgbFormat>);
+	type Bindings = (Mvp, SampledImage<image::R8G8B8A8SrgbFormat>);
 }
 
 fn main() {
@@ -75,7 +77,7 @@ fn main() {
 	let vertex_buffer = Buffer::make_array_buffer(&mut context, &vertices).unwrap();
 	let index_buffer = Buffer::make_array_buffer(&mut context, &indices).unwrap();
 
-	let mvp = Mat4::identity();
+	let mvp = Mvp::new(Mat4::identity(), Mat4::identity(), Mat4::identity());
 	let mvp_buffer = Buffer::make_item_buffer(&mut context, mvp).unwrap();
 
 	let texture_data = load_image();
@@ -145,8 +147,8 @@ fn create_proj(aspect: f32) -> Mat4 {
 	nalgebra::Perspective3::new(aspect, 3.14 / 2.0, 0.1, 1000.0).to_homogeneous()
 }
 
-fn create_mvp(aspect: f32, position: Point3, rotation: Vec3) -> Mat4 {
-	create_proj(aspect) * create_view() * create_model(position, rotation)
+fn create_mvp(aspect: f32, position: Point3, rotation: Vec3) -> Mvp {
+	Mvp::new(create_model(position, rotation), create_view(), create_proj(aspect))
 }
 
 fn load_image() -> ::image::RgbaImage {

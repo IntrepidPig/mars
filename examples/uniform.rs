@@ -17,8 +17,10 @@ use winit::{
 const VERTEX_SHADER: &str = "
 #version 450
 
-layout(set = 0, binding = 0) uniform MVP {
-	mat4 mvp;
+layout(set = 0, binding = 0) uniform Mvp {
+	mat4 model;
+	mat4 view;
+	mat4 proj;
 } mvp; 
 
 layout(location = 0) in vec4 pos;
@@ -27,7 +29,7 @@ layout(location = 1) in vec4 col;
 layout(location = 0) out vec4 vCol;
 
 void main() {
-	gl_Position = mvp.mvp * pos;
+	gl_Position = mvp.proj * mvp.view * mvp.model * pos;
 	vCol = col;
 }
 ";
@@ -48,7 +50,7 @@ struct UniformFunction;
 
 impl FunctionDef for UniformFunction {
 	type VertexInput = (Vec4, Vec4);
-	type Bindings = (Mat4,);
+	type Bindings = (Mvp,);
 }
 
 fn main() {
@@ -167,6 +169,6 @@ fn create_proj(aspect: f32) -> Mat4 {
 	nalgebra::Perspective3::new(aspect, 3.14 / 2.0, 1.0, 1000.0).to_homogeneous()
 }
 
-fn create_mvp(aspect: f32, position: Point3, rotation: Vec3) -> Mat4 {
-	create_proj(aspect) * create_view() * create_model(position, rotation)
+fn create_mvp(aspect: f32, position: Point3, rotation: Vec3) -> Mvp {
+	Mvp::new(create_model(position, rotation), create_view(), create_proj(aspect))
 }
