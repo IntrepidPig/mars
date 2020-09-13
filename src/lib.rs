@@ -29,11 +29,17 @@ pub struct Context {
 	pub(crate) device: Device,
 	pub(crate) queue: Queue,
 	pub(crate) command_pool: CommandPool,
+	#[allow(unused)]
+	pub(crate) debug_messenger: Option<rk::DebugUtilsMessengerInner>,
 }
 
 impl Context {
 	pub fn create<C: PhysicalDeviceChooser>(app_name: &str, chooser: C) -> Result<Self, ContextCreateError> {
 		let instance = create_instance(app_name)?;
+
+		let debug_messenger = rk::create_debug_report_callback(&instance, vk::DebugUtilsMessageSeverityFlagsEXT::all(), vk::DebugUtilsMessageTypeFlagsEXT::all(), None)
+			.map_err(|_| log::warn!("Failed to create debug report callback")).ok();
+		
 		let physical_device =
 			rk::PhysicalDevice::choose(&instance, chooser).map_err(|_| ContextCreateError::NoDevice)?;
 		let (device, queue) = create_device(&physical_device)?;
@@ -44,6 +50,7 @@ impl Context {
 			device,
 			queue,
 			command_pool,
+			debug_messenger,
 		})
 	}
 }
@@ -79,9 +86,6 @@ fn create_instance(app_name: &str) -> Result<Instance, ContextCreateError> {
 		vec![String::from("VK_LAYER_KHRONOS_validation")],
 		&extensions,
 	)?;
-
-	let _ = rk::create_debug_report_callback(&instance, vk::DebugUtilsMessageSeverityFlagsEXT::all(), vk::DebugUtilsMessageTypeFlagsEXT::all(), None)
-		.map_err(|_| log::warn!("Failed to create debug report callback"));
 
 	Ok(instance)
 }

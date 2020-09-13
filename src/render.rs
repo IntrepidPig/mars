@@ -6,53 +6,81 @@ use rk::{
 use crate::{
 	buffer::{Buffer, IndexBufferUsage, VertexBufferUsage},
 	function::{FunctionPrototype, FunctionDef, ArgumentsContainer},
-	pass::{RenderPass},
+	pass::{RenderPass, SubpassGraph, Attachments},
 	target::Target,
 	Context, MarsResult,
+	math::*,
 };
 
 pub struct RenderEngine {
-	pub(crate) render_pass: RenderPass,
 	pub(crate) command_pool: CommandPool,
 }
 
 impl RenderEngine {
-	pub fn new(context: &Context, render_pass: RenderPass) -> MarsResult<Self> {
+	pub fn new(context: &Context) -> MarsResult<Self> {
 		let command_pool = CommandPool::create(&context.device)?;
 
-		let this = Self { render_pass, command_pool };
+		let this = Self { command_pool };
 		
 		Ok(this)
 	}
 
-	pub fn draw<F: FunctionPrototype>(
+	pub fn clear<G: SubpassGraph>(
 		&mut self,
-		context: &mut Context,
-		target: &mut Target,
+		context: &Context,
+		target: &mut Target<G>,
+		render_pass: &RenderPass<G>,
+		color: Vec4,
+		depth: f32,
+	) -> MarsResult<()> {
+		self.submit(context, |_this, command_buffer| {
+			unsafe {
+				command_buffer.begin_render_pass(
+					&render_pass.render_pass,
+					&target.framebuffer,
+					vk::Rect2D {
+						offset: vk::Offset2D { x: 0, y: 0 },
+						extent: target.extent,
+					},
+					&[],
+				)?;
+				let clear_attachments = target.attachments.clears(color, depth);
+				let clear_rects = vec![vk::ClearRect {
+					rect: vk::Rect2D {
+						offset: vk::Offset2D { x: 0, y: 0 },
+						extent: target.extent,
+					},
+					base_array_layer: 0,
+					layer_count: 1,
+				}; clear_attachments.len()];
+				command_buffer.clear_attachments(&clear_attachments, &clear_rects);
+				command_buffer.end_render_pass();
+			}
+
+			Ok(())
+		})
+	}
+
+	pub fn draw<G: SubpassGraph, F: FunctionPrototype>(
+		&mut self,
+		context: &Context,
+		target: &mut Target<G>,
+		render_pass: &RenderPass<G>,
 		function: &FunctionDef<F>,
 		bindings: &ArgumentsContainer<F>,
 		vertices: &Buffer<VertexBufferUsage, [F::VertexInput]>,
 		indices: &Buffer<IndexBufferUsage, [u32]>,
 	) -> MarsResult<()> {
-		self.submit(context, |this, command_buffer| {
+		self.submit(context, |_this, command_buffer| {
 			unsafe {
 				command_buffer.begin_render_pass(
-					&mut this.render_pass.render_pass,
-					&mut target.framebuffer,
+					&render_pass.render_pass,
+					&target.framebuffer,
 					vk::Rect2D {
 						offset: vk::Offset2D { x: 0, y: 0 },
 						extent: target.extent,
 					},
-					&[
-						vk::ClearValue {
-							color: vk::ClearColorValue {
-								float32: [1.0, 1.0, 1.0, 1.0],
-							},
-						},
-						vk::ClearValue {
-							depth_stencil: vk::ClearDepthStencilValue { depth: 0.0, stencil: 0 },
-						},
-					],
+					&[],
 				)?;
 				command_buffer.set_viewport(vk::Viewport {
 					x: 0.0,

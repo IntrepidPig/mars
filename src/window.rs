@@ -4,8 +4,7 @@ use rk::{vk, wsi::{PresentationEngine, Surface}};
 
 use crate::{
 	render::RenderEngine,
-	pass::{RenderPass},
-	target::Target,
+	image::{usage, Image, FormatType},
 	Context, MarsResult,
 };
 
@@ -32,8 +31,8 @@ impl WindowEngine
 		let surface_size = swapchain.current_extent();
 		let presentation_engine = unsafe { PresentationEngine::new(swapchain).unwrap() };
 
-		let render_pass = RenderPass::create(context)?;
-		let render = RenderEngine::new(context, render_pass)?;
+		//let render_pass = RenderPass::create(context)?;
+		let render = RenderEngine::new(context)?;
 
 		Ok(Self {
 			render,
@@ -42,23 +41,13 @@ impl WindowEngine
 		})
 	}
 
-	pub fn create_target(&mut self, context: &mut Context, render_pass: &mut RenderPass) -> MarsResult<Target> {
-		Target::create(context, render_pass, self.current_extent)
-	}
-
-	pub fn present(&mut self, context: &mut Context, target: &mut Target) -> MarsResult<()> {
-		let new_extent_opt = context.queue.with_lock(|| {
+	pub fn present<F: FormatType>(&mut self, context: &Context, image: &Image<usage::TransferSrc, F>) -> MarsResult<Option<vk::Extent2D>> {
+		context.queue.with_lock(|| {
 			unsafe { self.presentation_engine.present(
 				&context.queue,
-				&target.color_image,
+				&image.image,
 			) }
-		})?;
-		if let Some(new_extent) = new_extent_opt {
-			target.resize(context, &mut self.render.render_pass, new_extent)?;
-			self.current_extent = new_extent;
-		}
-
-		Ok(())
+		})
 	}
 
 	pub fn current_extent(&self) -> vk::Extent2D {

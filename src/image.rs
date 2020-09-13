@@ -85,11 +85,11 @@ where
 		})
 	}
 
-	pub fn create(context: &mut Context, usage: U, extent: vk::Extent2D) -> MarsResult<Self> {
+	pub fn create(context: &Context, usage: U, extent: vk::Extent2D) -> MarsResult<Self> {
 		unsafe { Self::create_raw(context, usage.as_dyn(), F::as_raw(), extent) }
 	}
 
-	pub fn make_image(context: &mut Context, usage: U, extent: vk::Extent2D, data: &[u8]) -> MarsResult<Self> {
+	pub fn make_image(context: &Context, usage: U, extent: vk::Extent2D, data: &[u8]) -> MarsResult<Self> {
 		let mut image = unsafe { Self::create_raw(context, usage.as_dyn() | DynImageUsage::TRANSFER_DST, F::as_raw(), extent)? };
 		image.transition(
 			context,
@@ -108,8 +108,8 @@ where
 
 		unsafe {
 			context.device.copy_buffer_to_image(
-				&mut context.queue,
-				&mut context.command_pool,
+				&context.queue,
+				&context.command_pool,
 				&staging_buffer.buffer,
 				&image.image,
 				extent,
@@ -169,7 +169,7 @@ where
 	}
 
 	// TODO: worry about image synchronization
-	pub(crate) fn transition(&mut self, context: &mut Context, transition: &ImageLayoutTransition) -> MarsResult<()> {
+	pub(crate) fn transition(&mut self, context: &Context, transition: &ImageLayoutTransition) -> MarsResult<()> {
 		unsafe {
 			context.queue.with_lock(|| {
 				rk::image::transition_image_layout(
@@ -185,14 +185,59 @@ where
 	}
 }
 
-pub struct ImageView {
+pub struct ImageView<U: ImageUsageType, F: FormatType> {
 	pub(crate) image_view: RkImageView,
+	pub(crate) usage: DynImageUsage,
+	_phantom: PhantomData<(U, F)>,
 }
 
-impl ImageView {
-	pub fn create<U: ImageUsageType, F: FormatType>(image: &Image<U, F>) -> MarsResult<Self> {
+impl<U: ImageUsageType, F: FormatType> ImageView<U, F> {
+	pub fn create(image: &Image<U, F>) -> MarsResult<Self> {
 		let image_view = unsafe { RkImageView::create(&image.image, F::aspect())? };
-		Ok(Self { image_view })
+		Ok(Self { image_view, usage: image.usage, _phantom: PhantomData })
+	}
+
+	/// Returns all of the usages this image supports. (This may be more than the usage type
+	/// parameter indicates).
+	pub fn usage(&self) -> DynImageUsage {
+		self.usage
+	}
+
+	pub fn cast_usage<U2: ImageUsageType>(self, usage: U2) -> Result<ImageView<U2, F>, Self> {
+		if self.usage.as_dyn().contains(usage.as_dyn()) {
+			Ok(unsafe { self.cast_unchecked() })
+		} else {
+			Err(self)
+		}
+	}
+
+	pub fn cast_usage_ref<U2: ImageUsageType>(&self, usage: U2) -> Option<&ImageView<U2, F>> {
+		if self.usage.as_dyn().contains(usage.as_dyn()) {
+			Some(unsafe { self.cast_unchecked_ref() })
+		} else {
+			None
+		}
+	}
+
+	pub fn cast_usage_mut<U2: ImageUsageType>(&mut self, usage: U2) -> Option<&mut ImageView<U2, F>> {
+		if self.usage.as_dyn().contains(usage.as_dyn()) {
+			Some(unsafe { self.cast_unchecked_mut() })
+		} else {
+			None
+		}
+	}
+
+	pub(crate) unsafe fn cast_unchecked<U2: ImageUsageType, F2: FormatType>(self) -> ImageView<U2, F2> {
+		let Self { image_view, usage, _phantom } = self;
+		ImageView { image_view, usage, _phantom: PhantomData }
+	}
+
+	pub(crate) unsafe fn cast_unchecked_ref<U2: ImageUsageType, F2: FormatType>(&self) -> &ImageView<U2, F2> {
+		&*(self as *const Self as *const ImageView<U2, F2>)
+	}
+
+	pub(crate) unsafe fn cast_unchecked_mut<U2: ImageUsageType, F2: FormatType>(&mut self) -> &mut ImageView<U2, F2> {
+		&mut *(self as *mut Self as *mut ImageView<U2, F2>)
 	}
 }
 
@@ -201,15 +246,15 @@ pub struct Sampler {
 }
 
 impl Sampler {
-	pub fn create(context: &mut Context) -> MarsResult<Self> {
+	pub fn create(context: &Context) -> MarsResult<Self> {
 		let sampler = context.device.create_sampler()?;
 		Ok(Self { sampler })
 	}
 }
 
 pub struct SampledImage<F: FormatType> {
-	pub image: Image<usage::SampledImageUsage, F>,
-	pub image_view: ImageView,
+	pub image: Image<usage::SampledImage, F>,
+	pub image_view: ImageView<usage::SampledImage, F>,
 	pub sampler: Sampler,
 }
 
@@ -217,7 +262,7 @@ impl<F> SampledImage<F>
 where
 	F: FormatType,
 {
-	pub fn new(image: Image<usage::SampledImageUsage, F>, image_view: ImageView, sampler: Sampler) -> Self {
+	pub fn new(image: Image<usage::SampledImage, F>, image_view: ImageView<usage::SampledImage, F>, sampler: Sampler) -> Self {
 		Self {
 			image,
 			image_view,
@@ -225,7 +270,7 @@ where
 		}
 	}
 
-	pub fn create(context: &mut Context, mut image: Image<usage::SampledImageUsage, F>) -> MarsResult<Self> {
+	pub fn create(context: &Context, mut image: Image<usage::SampledImage, F>) -> MarsResult<Self> {
 		if image.layout != vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL {
 			let transition = ImageLayoutTransition {
 				aspect: F::aspect(),
@@ -291,7 +336,13 @@ pub mod usage {
 		};
 	}
 	
-	image_usage!(SampledImageUsage, SAMPLED);
+	image_usage!(TransferSrc, TRANSFER_SRC);
+	image_usage!(TransferDst, TRANSFER_DST);
+	image_usage!(SampledImage, SAMPLED);
+	image_usage!(Storage, STORAGE);
+	image_usage!(ColorAttachment, COLOR_ATTACHMENT);
+	image_usage!(DepthStencilAttachment, DEPTH_STENCIL_ATTACHMENT);
+	image_usage!(InputAttachment, INPUT_ATTACHMENT);
 }
 
 pub mod format {
@@ -319,8 +370,10 @@ pub mod format {
 		};
 	}
 
-	format!(B8G8R8A8UnormFormat, B8G8R8A8_UNORM, COLOR);
+	format!(B8G8R8A8Unorm, B8G8R8A8_UNORM, COLOR);
 
-	format!(R8G8B8A8UnormFormat, R8G8B8A8_UNORM, COLOR);
-	format!(R8G8B8A8SrgbFormat, R8G8B8A8_SRGB, COLOR);
+	format!(R8G8B8A8Unorm, R8G8B8A8_UNORM, COLOR);
+	format!(R8G8B8A8Srgb, R8G8B8A8_SRGB, COLOR);
+
+	format!(D32Sfloat, D32_SFLOAT, DEPTH);
 }

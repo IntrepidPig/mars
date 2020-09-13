@@ -13,7 +13,7 @@ use crate::{
 	Context, MarsResult,
 	buffer::{Buffer, UniformBufferUsage, UntypedBuffer},
 	image::{FormatType, SampledImage},
-	pass::{RenderPass},
+	pass::{RenderPass, SubpassGraph},
 };
 
 pub trait FunctionPrototype {
@@ -49,17 +49,17 @@ pub struct FunctionDef<F: FunctionPrototype> {
 }
 
 impl<F> FunctionDef<F> where F: FunctionPrototype {
-	pub fn create(context: &mut Context, render_pass: &mut RenderPass, function_impl: FunctionImpl<F>) -> MarsResult<Self> {
+	pub fn create<G: SubpassGraph>(context: &Context, render_pass: &RenderPass<G>, function_impl: FunctionImpl<F>) -> MarsResult<Self> {
 		//let parameters = F::VertexInputs::parameters(); // TODO: multiple vertex bindings
 		let parameters = vec![ParameterDesc {
 			attributes: F::VertexInput::attributes(),
 		}];
 		let (vertex_bindings, vertex_attributes) = parameter_descs_to_raw(&parameters);
 		let bindings = F::Bindings::descriptions();
-		let descriptor_pool = create_descriptor_pool(&mut context.device, &bindings)?;
+		let descriptor_pool = create_descriptor_pool(&context.device, &bindings)?;
 		let descriptor_bindings = bindings_descs_to_raw(&bindings);
 		let (pipeline, pipeline_layout, descriptor_set_layout) = create_pipeline(
-			&mut context.device,
+			&context.device,
 			&render_pass.render_pass,
 			vertex_bindings,
 			vertex_attributes,
@@ -78,7 +78,7 @@ impl<F> FunctionDef<F> where F: FunctionPrototype {
 
 	pub fn make_arguments(
 		&mut self,
-		context: &mut Context,
+		context: &Context,
 		arguments: <F::Bindings as Bindings>::Arguments,
 	) -> MarsResult<ArgumentsContainer<F>> {
 		let descriptor_set = context
@@ -113,7 +113,7 @@ fn create_shader_module(device: &Device, spirv: &[u32]) -> ShaderModule {
 		.expect("Failed to create shader_module")
 }
 
-fn create_descriptor_pool(device: &mut Device, binding_descs: &[BindingDesc]) -> MarsResult<DescriptorPool> {
+fn create_descriptor_pool(device: &Device, binding_descs: &[BindingDesc]) -> MarsResult<DescriptorPool> {
 	const MAX_SETS: u32 = 1024;
 	const PER_BINDING: u32 = 128;
 	let mut pool_sizes = binding_descs
@@ -136,7 +136,7 @@ fn create_descriptor_pool(device: &mut Device, binding_descs: &[BindingDesc]) ->
 }
 
 fn create_pipeline(
-	device: &mut Device,
+	device: &Device,
 	render_pass: &RkRenderPass,
 	vertex_binding_descs: Vec<vk::VertexInputBindingDescription>,
 	vertex_attribute_descs: Vec<vk::VertexInputAttributeDescription>,

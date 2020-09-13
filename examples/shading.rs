@@ -1,9 +1,11 @@
 use std::time::Instant;
 
 use mars::{
-	buffer::{Buffer},
-	function::{FunctionDef, FunctionPrototype, FunctionImpl},
-	pass::{RenderPass},
+	buffer::Buffer,
+	function::{FunctionDef, FunctionImpl, FunctionPrototype},
+	image::{usage, DynImageUsage, format},
+	pass::{RenderPass, subpasses::SimpleSubpassPrototype},
+	target::{Target},
 	math::*,
 	window::WindowEngine,
 	Context,
@@ -110,21 +112,25 @@ fn main() {
 	let event_loop = EventLoop::new();
 	let window = WindowBuilder::new().build(&event_loop).unwrap();
 
-	let mut context = Context::create("mars_shading_example", rk::FirstPhysicalDeviceChooser).unwrap();
+	let context = Context::create("mars_shading_example", rk::FirstPhysicalDeviceChooser).unwrap();
 
-	let mut render_pass = RenderPass::create(&mut context).unwrap();
-	let mut window_engine = WindowEngine::new(&mut context, &window).unwrap();
-	let mut target = window_engine.create_target(&mut context, &mut render_pass).unwrap();
+	let mut window_engine = WindowEngine::new(&context, &window).unwrap();
+	
+	let simple_subpass = SimpleSubpassPrototype::<format::B8G8R8A8Unorm, format::D32Sfloat>::new();
+	let render_pass = RenderPass::create(&context, &simple_subpass).unwrap();
+	
+	let attachments=  SimpleSubpassPrototype::create_attachments(&context, DynImageUsage::TRANSFER_SRC, window_engine.current_extent()).unwrap();
+	let mut target = Target::create(&context, &render_pass, attachments).unwrap();
 	
 	let cube_vert_shader = compile_shader(CUBE_VERTEX_SHADER, "vert.glsl", shaderc::ShaderKind::Vertex);
 	let cube_frag_shader = compile_shader(CUBE_FRAGMENT_SHADER, "frag.glsl", shaderc::ShaderKind::Fragment);
 	let cube_function_impl = unsafe { FunctionImpl::<CubeShadingFunction>::from_raw(cube_vert_shader, cube_frag_shader) };
-	let mut cube_function_def = FunctionDef::create(&mut context, &mut render_pass, cube_function_impl).unwrap();
+	let mut cube_function_def = FunctionDef::create(&context, &render_pass, cube_function_impl).unwrap();
 
 	let light_vert_shader = compile_shader(LIGHT_VERTEX_SHADER, "vert.glsl", shaderc::ShaderKind::Vertex);
 	let light_frag_shader = compile_shader(LIGHT_FRAGMENT_SHADER, "frag.glsl", shaderc::ShaderKind::Fragment);
 	let light_function_impl = unsafe { FunctionImpl::<LightShadingFunction>::from_raw(light_vert_shader, light_frag_shader) };
-	let mut light_function_def = FunctionDef::create(&mut context, &mut render_pass, light_function_impl).unwrap();
+	let mut light_function_def = FunctionDef::create(&context, &render_pass, light_function_impl).unwrap();
 
 	let vertices: [(Vec3, Vec3); 36] = [
 		(Vec3::new(-0.5, -0.5, -0.5), Vec3::new(0.0,  0.0, -1.0)),
@@ -170,13 +176,13 @@ fn main() {
 		(Vec3::new(-0.5,  0.5, -0.5), Vec3::new(  0.0,  1.0,  0.0)),
 	];
 	let indices = (0..36).collect::<Vec<_>>();
-	let vertex_buffer = Buffer::make_array_buffer(&mut context, &vertices).unwrap();
-	let index_buffer = Buffer::make_array_buffer(&mut context, &indices).unwrap();
+	let vertex_buffer = Buffer::make_array_buffer(&context, &vertices).unwrap();
+	let index_buffer = Buffer::make_array_buffer(&context, &indices).unwrap();
 
 	let extent = window_engine.current_extent();
 	let aspect = extent.width as f32 / extent.height as f32;
 	let cube_mvp_buffer = Buffer::make_item_buffer(
-		&mut context,
+		&context,
 		create_mvp(
 			aspect,
 			Point3::new(1.0, -1.5, 0.0),
@@ -184,14 +190,14 @@ fn main() {
 		),
 	)
 	.unwrap();
-	let light_position_buffer = Buffer::make_item_buffer(&mut context, Vec3::new(0.0, 0.0, 0.0)).unwrap();
-	let light_mvp_buffer = Buffer::make_item_buffer(&mut context, Mvp::new(Mat4::identity(), Mat4::identity(), Mat4::identity())).unwrap();
+	let light_position_buffer = Buffer::make_item_buffer(&context, Vec3::new(0.0, 0.0, 0.0)).unwrap();
+	let light_mvp_buffer = Buffer::make_item_buffer(&context, Mvp::new(Mat4::identity(), Mat4::identity(), Mat4::identity())).unwrap();
 
 	let mut cube_arguments = cube_function_def
-		.make_arguments(&mut context, (cube_mvp_buffer, light_position_buffer))
+		.make_arguments(&context, (cube_mvp_buffer, light_position_buffer))
 		.unwrap();
 	let mut light_arguments = light_function_def
-		.make_arguments(&mut context, (light_mvp_buffer,))
+		.make_arguments(&context, (light_mvp_buffer,))
 		.unwrap();
 
 	let start = Instant::now();
@@ -227,18 +233,18 @@ fn main() {
 			})
 			.unwrap();
 
-		target
-			.clear(&mut context, Vec4::new(0.3, 0.3, 0.3, 1.0))
+		window_engine.render
+			.clear(&context, &mut target, &render_pass, Vec4::new(0.3, 0.3, 0.3, 0.3), 1.0)
 			.unwrap();
 		window_engine
 			.render
-			.draw(&mut context, &mut target, &cube_function_def, &cube_arguments, &vertex_buffer, &index_buffer)
+			.draw(&context, &mut target, &render_pass, &cube_function_def, &cube_arguments, &vertex_buffer, &index_buffer)
 			.unwrap();
 		window_engine
 			.render
-			.draw(&mut context, &mut target, &light_function_def, &light_arguments, &vertex_buffer, &index_buffer)
+			.draw(&context, &mut target, &render_pass, &light_function_def, &light_arguments, &vertex_buffer, &index_buffer)
 			.unwrap();
-		window_engine.present(&mut context, &mut target).unwrap();
+		window_engine.present(&context, target.attachments().color_attachments.0.image.cast_usage_ref(usage::TransferSrc).unwrap()).unwrap();
 
 		match event {
 			Event::WindowEvent {
