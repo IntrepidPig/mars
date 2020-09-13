@@ -2,8 +2,9 @@ use std::time::Instant;
 
 use mars::{
 	buffer::Buffer,
-	function::{FunctionDef, FunctionShader},
-	image::{self, Image, SampledImage},
+	function::{FunctionDef, FunctionImpl, FunctionPrototype},
+	image::{Image, SampledImage, usage::{SampledImageUsage}, format},
+	pass::{RenderPass},
 	math::*,
 	vk,
 	window::WindowEngine,
@@ -52,20 +53,25 @@ void main() {
 
 struct TextureFunction;
 
-impl FunctionDef for TextureFunction {
+impl FunctionPrototype for TextureFunction {
 	type VertexInput = (Vec2, Vec2);
-	type Bindings = (Mvp, SampledImage<image::R8G8B8A8SrgbFormat>);
+	type Bindings = (Mvp, SampledImage<format::R8G8B8A8SrgbFormat>);
 }
 
 fn main() {
 	let event_loop = EventLoop::new();
 	let window = WindowBuilder::new().build(&event_loop).unwrap();
 
-	let mut context = Context::create("mars_triangle_example", rk::FirstPhysicalDeviceChooser).unwrap();
+	let mut context = Context::create("mars_texture_example", rk::FirstPhysicalDeviceChooser).unwrap();
+	
+	let mut render_pass = RenderPass::create(&mut context).unwrap();
+	let mut window_engine = WindowEngine::new(&mut context, &window).unwrap();
+	let mut target = window_engine.create_target(&mut context, &mut render_pass).unwrap();
+	
 	let vert_shader = compile_shader(VERTEX_SHADER, "vert.glsl", shaderc::ShaderKind::Vertex);
 	let frag_shader = compile_shader(FRAGMENT_SHADER, "frag.glsl", shaderc::ShaderKind::Fragment);
-	let function_shader = unsafe { FunctionShader::<TextureFunction>::from_raw(vert_shader, frag_shader) };
-	let mut window_engine = WindowEngine::new(&mut context, &window, function_shader).unwrap();
+	let function_impl = unsafe { FunctionImpl::<TextureFunction>::from_raw(vert_shader, frag_shader) };
+	let mut function_def = FunctionDef::create(&mut context, &mut render_pass, function_impl).unwrap();
 
 	let vertices = [
 		(Vec2::new(-0.5, -0.5), Vec2::new(0.0, 0.0)),
@@ -83,6 +89,7 @@ fn main() {
 	let texture_data = load_image();
 	let image = Image::make_image(
 		&mut context,
+		SampledImageUsage,
 		vk::Extent2D {
 			width: texture_data.width(),
 			height: texture_data.height(),
@@ -92,9 +99,8 @@ fn main() {
 	.unwrap();
 	let sampled_image = SampledImage::create(&mut context, image).unwrap();
 
-	let mut set = window_engine
-		.render
-		.make_descriptor_set(&mut context, (mvp_buffer, sampled_image))
+	let mut set = function_def
+		.make_arguments(&mut context, (mvp_buffer, sampled_image))
 		.unwrap();
 
 	let start = Instant::now();
@@ -106,20 +112,17 @@ fn main() {
 
 		set.arguments
 			.0
-			.with_map_mut(&mut context, |map| {
-				*map = create_mvp(aspect, Point3::new(0.0, 0.0, 0.0), Vec3::new(0.2, t, -0.2));
-			})
+			.with_map_mut(|map| *map = create_mvp(aspect, Point3::new(0.0, 0.0, 0.0), Vec3::new(0.2, t, -0.2)))
 			.unwrap();
 
-		window_engine
-			.render
+		target
 			.clear(&mut context, Vec4::new(1.0, 1.0, 1.0, 1.0))
 			.unwrap();
 		window_engine
 			.render
-			.draw(&mut context, &set, &vertex_buffer, &index_buffer)
+			.draw(&mut context, &mut target, &function_def, &set, &vertex_buffer, &index_buffer)
 			.unwrap();
-		window_engine.present(&mut context).unwrap();
+		window_engine.present(&mut context, &mut target).unwrap();
 
 		match event {
 			Event::WindowEvent {

@@ -7,14 +7,16 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rk = { path = "../rk" }
+rk = { path = "../rk", default-features = false }
 nalgebra = "0.22.0"
 thiserror = "1.0.20"
 log = "0.4.11"
 shaderc = "0.6.2"
 raw-window-handle = "0.3.3"
+bitflags = "1.2.1"
 
 [dev-dependencies]
+simple_logger = "1.9.0"
 winit = "0.22.2"
 nalgebra-glm = "0.8.0"
 image = "0.23.9"

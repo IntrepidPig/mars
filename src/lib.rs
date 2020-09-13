@@ -25,7 +25,6 @@ pub mod window;
 pub type MarsResult<T> = rk::VkResult<T>;
 
 pub struct Context {
-	pub(crate) instance: Instance,
 	pub(crate) physical_device: PhysicalDevice,
 	pub(crate) device: Device,
 	pub(crate) queue: Queue,
@@ -37,11 +36,10 @@ impl Context {
 		let instance = create_instance(app_name)?;
 		let physical_device =
 			rk::PhysicalDevice::choose(&instance, chooser).map_err(|_| ContextCreateError::NoDevice)?;
-		let (mut device, queue) = create_device(&physical_device)?;
-		let command_pool = device.create_command_pool()?;
+		let (device, queue) = create_device(&physical_device)?;
+		let command_pool = CommandPool::create(&device)?;
 
 		Ok(Self {
-			instance,
 			physical_device,
 			device,
 			queue,
@@ -82,8 +80,8 @@ fn create_instance(app_name: &str) -> Result<Instance, ContextCreateError> {
 		&extensions,
 	)?;
 
-	/* let _ = rk::create_debug_report_callback(&instance, vk::DebugUtilsMessageSeverityFlagsEXT::all(), vk::DebugUtilsMessageTypeFlagsEXT::all(), None)
-	.map_err(|_| log::warn!("Failed to create debug report callback")); */
+	let _ = rk::create_debug_report_callback(&instance, vk::DebugUtilsMessageSeverityFlagsEXT::all(), vk::DebugUtilsMessageTypeFlagsEXT::all(), None)
+		.map_err(|_| log::warn!("Failed to create debug report callback"));
 
 	Ok(instance)
 }

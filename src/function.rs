@@ -1,26 +1,35 @@
 use std::{marker::PhantomData, sync::Arc};
 
-use rk::vk;
-
-use crate::{
-	buffer::{Buffer, UniformBufferUsage, UntypedBuffer},
-	image::{FormatType, SampledImage},
+use rk::{
+	vk,
+	device::{Device},
+	pipe::{Pipeline, PipelineLayout, DescriptorSetLayout},
+	descriptor::{DescriptorPool, DescriptorSet},
+	pass::{RenderPass as RkRenderPass},
+	shader::{ShaderModule},
 };
 
-pub trait FunctionDef {
+use crate::{
+	Context, MarsResult,
+	buffer::{Buffer, UniformBufferUsage, UntypedBuffer},
+	image::{FormatType, SampledImage},
+	pass::{RenderPass},
+};
+
+pub trait FunctionPrototype {
 	type VertexInput: Parameter;
 	type Bindings: Bindings;
 }
 
-pub struct FunctionShader<F: FunctionDef> {
+pub struct FunctionImpl<F: FunctionPrototype> {
 	pub(crate) vert: Vec<u32>,
 	pub(crate) frag: Vec<u32>,
 	pub(crate) _phantom: PhantomData<F>,
 }
 
-impl<F> FunctionShader<F>
+impl<F> FunctionImpl<F>
 where
-	F: FunctionDef,
+	F: FunctionPrototype,
 {
 	pub unsafe fn from_raw(vert: Vec<u32>, frag: Vec<u32>) -> Self {
 		Self {
@@ -30,6 +39,143 @@ where
 		}
 	}
 }
+
+pub struct FunctionDef<F: FunctionPrototype> {
+	pub(crate) descriptor_pool: DescriptorPool,
+	pub(crate) descriptor_set_layout: DescriptorSetLayout,
+	pub(crate) pipeline: Pipeline,
+	pub(crate) pipeline_layout: PipelineLayout,
+	_phantom: PhantomData<F>,
+}
+
+impl<F> FunctionDef<F> where F: FunctionPrototype {
+	pub fn create(context: &mut Context, render_pass: &mut RenderPass, function_impl: FunctionImpl<F>) -> MarsResult<Self> {
+		//let parameters = F::VertexInputs::parameters(); // TODO: multiple vertex bindings
+		let parameters = vec![ParameterDesc {
+			attributes: F::VertexInput::attributes(),
+		}];
+		let (vertex_bindings, vertex_attributes) = parameter_descs_to_raw(&parameters);
+		let bindings = F::Bindings::descriptions();
+		let descriptor_pool = create_descriptor_pool(&mut context.device, &bindings)?;
+		let descriptor_bindings = bindings_descs_to_raw(&bindings);
+		let (pipeline, pipeline_layout, descriptor_set_layout) = create_pipeline(
+			&mut context.device,
+			&render_pass.render_pass,
+			vertex_bindings,
+			vertex_attributes,
+			descriptor_bindings,
+			&function_impl.vert,
+			&function_impl.frag,
+		)?;
+		Ok(Self {
+			descriptor_pool,
+			descriptor_set_layout,
+			pipeline,
+			pipeline_layout,
+			_phantom: PhantomData,
+		})
+	}
+
+	pub fn make_arguments(
+		&mut self,
+		context: &mut Context,
+		arguments: <F::Bindings as Bindings>::Arguments,
+	) -> MarsResult<ArgumentsContainer<F>> {
+		let descriptor_set = context
+			.device
+			.allocate_descriptor_set(&self.descriptor_pool, &self.descriptor_set_layout)?;
+		let writes = arguments.as_writes();
+		let (raw_writes, _backing) = writes_to_raw(***descriptor_set, &writes);
+		unsafe { context.device.write_descriptor_set(&raw_writes)? };
+		Ok(ArgumentsContainer {
+			arguments,
+			descriptor_set,
+		})
+	}
+}
+
+pub struct ArgumentsContainer<F: FunctionPrototype> {
+	pub arguments: <F::Bindings as Bindings>::Arguments,
+	pub(crate) descriptor_set: DescriptorSet,
+}
+
+
+/* fn compile_shader(source: &str, filename: &str, kind: shaderc::ShaderKind) -> Vec<u32> {
+	let mut compiler = shaderc::Compiler::new().expect("Failed to initialize compiler");
+	let artifact = compiler.compile_into_spirv(source, kind, filename, "main", None)
+		.expect("Failed to compile shader");
+	artifact.as_binary().to_owned()
+} */
+
+fn create_shader_module(device: &Device, spirv: &[u32]) -> ShaderModule {
+	device
+		.create_shader_module_from_spirv(spirv)
+		.expect("Failed to create shader_module")
+}
+
+fn create_descriptor_pool(device: &mut Device, binding_descs: &[BindingDesc]) -> MarsResult<DescriptorPool> {
+	const MAX_SETS: u32 = 1024;
+	const PER_BINDING: u32 = 128;
+	let mut pool_sizes = binding_descs
+		.iter()
+		.map(|b| vk::DescriptorPoolSize {
+			ty: b.binding_type.into(),
+			descriptor_count: PER_BINDING,
+		})
+		.collect::<Vec<_>>();
+	if pool_sizes.is_empty() {
+		// Workaround for when there are no bindings because pool_sizes must have at least one element
+		pool_sizes.push(vk::DescriptorPoolSize {
+			ty: vk::DescriptorType::UNIFORM_BUFFER,
+			descriptor_count: 1,
+		})
+	}
+
+	let pool = device.create_descriptor_pool(MAX_SETS, &pool_sizes)?;
+	Ok(pool)
+}
+
+fn create_pipeline(
+	device: &mut Device,
+	render_pass: &RkRenderPass,
+	vertex_binding_descs: Vec<vk::VertexInputBindingDescription>,
+	vertex_attribute_descs: Vec<vk::VertexInputAttributeDescription>,
+	binding_descs: Vec<vk::DescriptorSetLayoutBinding>,
+	vert_spirv: &[u32],
+	frag_spirv: &[u32],
+) -> MarsResult<(Pipeline, PipelineLayout, DescriptorSetLayout)> {
+	let vertex_shader = create_shader_module(device, &vert_spirv);
+	let fragment_shader = create_shader_module(device, &frag_spirv);
+	let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
+		.logic_op_enable(false)
+		.attachments(&[vk::PipelineColorBlendAttachmentState::builder()
+			.blend_enable(true)
+			.src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+			.dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+			.color_blend_op(vk::BlendOp::ADD)
+			.src_alpha_blend_factor(vk::BlendFactor::ONE)
+			.dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+			.alpha_blend_op(vk::BlendOp::ADD)
+			.color_write_mask(vk::ColorComponentFlags::all())
+			.build()])
+		.blend_constants([1.0, 1.0, 1.0, 1.0])
+		.build();
+	let descriptor_set_layout = device.create_descriptor_set_layout(&binding_descs)?;
+	let pipeline_layout = device.create_pipeline_layout(&descriptor_set_layout)?;
+	let pipeline = device.create_pipeline(
+		&vertex_shader,
+		&vertex_binding_descs,
+		&vertex_attribute_descs,
+		&fragment_shader,
+		&color_blend_state,
+		&pipeline_layout,
+		render_pass,
+		0,
+	)?;
+
+	Ok((pipeline, pipeline_layout, descriptor_set_layout))
+}
+
 
 pub struct ParameterDesc {
 	pub attributes: Vec<AttributeDesc>,

@@ -20,9 +20,9 @@ pub struct Buffer<U: BufferUsageType, T: ?Sized> {
 }
 
 impl<U, T> Buffer<U, [T]> where U: BufferUsageType, T: Copy {
-	pub fn make_array_buffer(context: &mut Context, data: &[T]) -> MarsResult<Self> {
+	pub fn make_array_buffer(context: &Context, data: &[T]) -> MarsResult<Self> {
 		assert!(data.len() > 0);
-		let buffer = context.device.make_buffer(data, U::as_raw())?;
+		let buffer = unsafe { RkBuffer::make(&context.device, U::as_raw(), data)? };
 		Ok(Self {
 			buffer,
 			len: data.len(),
@@ -31,35 +31,33 @@ impl<U, T> Buffer<U, [T]> where U: BufferUsageType, T: Copy {
 		})
 	}
 
-	pub fn map<'a>(&'a self, context: &'a mut Context) -> MarsResult<Map<'a, U, T>> {
+	pub fn map<'a>(&'a self) -> MarsResult<Map<'a, U, T>> {
 		unsafe {
-			let ptr = context.device.map_buffer(&self.buffer)?;
+			let ptr = self.buffer.map()?;
 			Ok(Map {
-				context,
 				buffer: self,
 				ptr,
 			})
 		}
 	}
 
-	pub fn map_mut<'a>(&'a mut self, context: &'a mut Context) -> MarsResult<MapMut<'a, U, T>> {
+	pub fn map_mut<'a>(&'a mut self) -> MarsResult<MapMut<'a, U, T>> {
 		unsafe {
-			let ptr = context.device.map_buffer(&self.buffer)?;
+			let ptr = self.buffer.map()?;
 			Ok(MapMut {
-				context,
 				buffer: self,
 				ptr,
 			})
 		}
 	}
 
-	pub fn with_map<F: FnOnce(&[T])>(&self, context: &mut Context, f: F) -> MarsResult<()> {
-		f(&*self.map(context)?);
+	pub fn with_map<F: FnOnce(&[T])>(&self, f: F) -> MarsResult<()> {
+		f(&*self.map()?);
 		Ok(())
 	}
 
-	pub fn with_map_mut<F: FnOnce(&mut [T])>(&mut self, context: &mut Context, f: F) -> MarsResult<()> {
-		f(&mut *self.map_mut(context)?);
+	pub fn with_map_mut<F: FnOnce(&mut [T])>(&mut self, f: F) -> MarsResult<()> {
+		f(&mut *self.map_mut()?);
 		Ok(())
 	}
 }
@@ -70,9 +68,9 @@ where
 	T: Copy,
 {
 	// Slices don't implement Copy so this ensures that an array buffer can't be created with this constructor
-	pub fn make_item_buffer(context: &mut Context, data: T) -> MarsResult<Self> {
+	pub fn make_item_buffer(context: &Context, data: T) -> MarsResult<Self> {
 		assert!(std::mem::size_of::<T>() > 0);
-		let buffer = context.device.make_buffer(&[data], U::as_raw())?;
+		let buffer = unsafe { RkBuffer::make(&context.device, U::as_raw(), &[data])? };
 		Ok(Self {
 			buffer,
 			len: 1,
@@ -81,35 +79,33 @@ where
 		})
 	}
 
-	pub fn map<'a>(&'a self, context: &'a mut Context) -> MarsResult<ItemMap<'a, U, T>> {
+	pub fn map<'a>(&'a self) -> MarsResult<ItemMap<'a, U, T>> {
 		unsafe {
-			let ptr = context.device.map_buffer(&self.buffer)?;
+			let ptr = self.buffer.map()?;
 			Ok(ItemMap {
-				context,
 				buffer: self,
 				ptr,
 			})
 		}
 	}
 
-	pub fn map_mut<'a>(&'a mut self, context: &'a mut Context) -> MarsResult<ItemMapMut<'a, U, T>> {
+	pub fn map_mut<'a>(&'a mut self) -> MarsResult<ItemMapMut<'a, U, T>> {
 		unsafe {
-			let ptr = context.device.map_buffer(&self.buffer)?;
+			let ptr = self.buffer.map()?;
 			Ok(ItemMapMut {
-				context,
 				buffer: self,
 				ptr,
 			})
 		}
 	}
 
-	pub fn with_map<F: FnOnce(&T)>(&self, context: &mut Context, f: F) -> MarsResult<()> {
-		f(&*self.map(context)?);
+	pub fn with_map<F: FnOnce(&T)>(&self, f: F) -> MarsResult<()> {
+		f(&*self.map()?);
 		Ok(())
 	}
 
-	pub fn with_map_mut<F: FnOnce(&mut T)>(&mut self, context: &mut Context, f: F) -> MarsResult<()> {
-		f(&mut *self.map_mut(context)?);
+	pub fn with_map_mut<F: FnOnce(&mut T)>(&mut self, f: F) -> MarsResult<()> {
+		f(&mut *self.map_mut()?);
 		Ok(())
 	}
 
@@ -125,7 +121,6 @@ where
 }
 
 pub struct Map<'a, U: BufferUsageType, T: Copy> {
-	context: &'a Context,
 	buffer: &'a Buffer<U, [T]>,
 	ptr: *const c_void,
 }
@@ -149,13 +144,12 @@ where
 {
 	fn drop(&mut self) {
 		unsafe {
-			self.context.device.unmap_buffer(&self.buffer.buffer);
+			self.buffer.buffer.unmap();
 		}
 	}
 }
 
 pub struct MapMut<'a, U: BufferUsageType, T: Copy> {
-	context: &'a Context,
 	buffer: &'a Buffer<U, [T]>,
 	ptr: *mut c_void,
 }
@@ -189,13 +183,12 @@ where
 {
 	fn drop(&mut self) {
 		unsafe {
-			self.context.device.unmap_buffer(&self.buffer.buffer);
+			self.buffer.buffer.unmap();
 		}
 	}
 }
 
 pub struct ItemMap<'a, U: BufferUsageType, T: Copy> {
-	context: &'a Context,
 	buffer: &'a Buffer<U, T>,
 	ptr: *const c_void,
 }
@@ -219,13 +212,12 @@ where
 {
 	fn drop(&mut self) {
 		unsafe {
-			self.context.device.unmap_buffer(&self.buffer.buffer);
+			self.buffer.buffer.unmap();
 		}
 	}
 }
 
 pub struct ItemMapMut<'a, U: BufferUsageType, T: Copy> {
-	context: &'a Context,
 	buffer: &'a Buffer<U, T>,
 	ptr: *mut c_void,
 }
@@ -259,7 +251,7 @@ where
 {
 	fn drop(&mut self) {
 		unsafe {
-			self.context.device.unmap_buffer(&self.buffer.buffer);
+			self.buffer.buffer.unmap();
 		}
 	}
 }
