@@ -5,11 +5,11 @@ use rk::{
 
 use crate::{
 	buffer::{Buffer, IndexBufferUsage, VertexBufferUsage},
-	function::{FunctionPrototype, FunctionDef, ArgumentsContainer},
-	pass::{RenderPass, SubpassGraph, Attachments},
+	function::{ArgumentsContainer, FunctionDef, FunctionPrototype},
+	math::*,
+	pass::{Attachments, RenderPass, SubpassGraph},
 	target::Target,
 	Context, MarsResult,
-	math::*,
 };
 
 pub struct RenderEngine {
@@ -21,7 +21,7 @@ impl RenderEngine {
 		let command_pool = CommandPool::create(&context.device)?;
 
 		let this = Self { command_pool };
-		
+
 		Ok(this)
 	}
 
@@ -45,14 +45,17 @@ impl RenderEngine {
 					&[],
 				)?;
 				let clear_attachments = target.attachments.clears(color, depth);
-				let clear_rects = vec![vk::ClearRect {
-					rect: vk::Rect2D {
-						offset: vk::Offset2D { x: 0, y: 0 },
-						extent: target.extent,
-					},
-					base_array_layer: 0,
-					layer_count: 1,
-				}; clear_attachments.len()];
+				let clear_rects = vec![
+					vk::ClearRect {
+						rect: vk::Rect2D {
+							offset: vk::Offset2D { x: 0, y: 0 },
+							extent: target.extent,
+						},
+						base_array_layer: 0,
+						layer_count: 1,
+					};
+					clear_attachments.len()
+				];
 				command_buffer.clear_attachments(&clear_attachments, &clear_rects);
 				command_buffer.end_render_pass();
 			}
@@ -120,7 +123,9 @@ impl RenderEngine {
 		recording(self, &mut command_buffer)?;
 		let command_buffer = command_buffer.end()?;
 		let command_buffer = unsafe {
-			context.queue.with_lock(|| context.queue.submit(command_buffer, &[], &[]))?
+			context
+				.queue
+				.with_lock(|| context.queue.submit(command_buffer, &[], &[]))?
 		};
 		command_buffer.wait()?;
 

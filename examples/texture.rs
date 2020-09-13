@@ -3,10 +3,10 @@ use std::time::Instant;
 use mars::{
 	buffer::Buffer,
 	function::{FunctionDef, FunctionImpl, FunctionPrototype},
-	image::{Image, SampledImage, usage, DynImageUsage, format},
-	pass::{RenderPass, subpasses::SimpleSubpassPrototype},
-	target::{Target},
+	image::{format, usage, DynImageUsage, Image, SampledImage},
 	math::*,
+	pass::{subpasses::SimpleSubpassPrototype, RenderPass},
+	target::Target,
 	vk,
 	window::WindowEngine,
 	Context,
@@ -66,13 +66,18 @@ fn main() {
 	let context = Context::create("mars_texture_example", rk::FirstPhysicalDeviceChooser).unwrap();
 
 	let mut window_engine = WindowEngine::new(&context, &window).unwrap();
-	
+
 	let simple_subpass = SimpleSubpassPrototype::<format::B8G8R8A8Unorm, format::D32Sfloat>::new();
 	let render_pass = RenderPass::create(&context, &simple_subpass).unwrap();
-	
-	let attachments=  SimpleSubpassPrototype::create_attachments(&context, DynImageUsage::TRANSFER_SRC, window_engine.current_extent()).unwrap();
+
+	let attachments = SimpleSubpassPrototype::create_attachments(
+		&context,
+		DynImageUsage::TRANSFER_SRC,
+		window_engine.current_extent(),
+	)
+	.unwrap();
 	let mut target = Target::create(&context, &render_pass, attachments).unwrap();
-	
+
 	let vert_shader = compile_shader(VERTEX_SHADER, "vert.glsl", shaderc::ShaderKind::Vertex);
 	let frag_shader = compile_shader(FRAGMENT_SHADER, "frag.glsl", shaderc::ShaderKind::Fragment);
 	let function_impl = unsafe { FunctionImpl::<TextureFunction>::from_raw(vert_shader, frag_shader) };
@@ -120,14 +125,34 @@ fn main() {
 			.with_map_mut(|map| *map = create_mvp(aspect, Point3::new(0.0, 0.0, 0.0), Vec3::new(0.2, t, -0.2)))
 			.unwrap();
 
-		window_engine.render
+		window_engine
+			.render
 			.clear(&context, &mut target, &render_pass, Vec4::new(1.0, 1.0, 1.0, 1.0), 1.0)
 			.unwrap();
 		window_engine
 			.render
-			.draw(&context, &mut target, &render_pass, &function_def, &set, &vertex_buffer, &index_buffer)
+			.draw(
+				&context,
+				&mut target,
+				&render_pass,
+				&function_def,
+				&set,
+				&vertex_buffer,
+				&index_buffer,
+			)
 			.unwrap();
-		window_engine.present(&context, target.attachments().color_attachments.0.image.cast_usage_ref(usage::TransferSrc).unwrap()).unwrap();
+		window_engine
+			.present(
+				&context,
+				target
+					.attachments()
+					.color_attachments
+					.0
+					.image
+					.cast_usage_ref(usage::TransferSrc)
+					.unwrap(),
+			)
+			.unwrap();
 
 		match event {
 			Event::WindowEvent {

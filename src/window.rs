@@ -1,10 +1,13 @@
 use raw_window_handle::HasRawWindowHandle;
 
-use rk::{vk, wsi::{PresentationEngine, Surface}};
+use rk::{
+	vk,
+	wsi::{PresentationEngine, Surface},
+};
 
 use crate::{
+	image::{usage, FormatType, Image},
 	render::RenderEngine,
-	image::{usage, Image, FormatType},
 	Context, MarsResult,
 };
 
@@ -14,12 +17,8 @@ pub struct WindowEngine {
 	pub(crate) current_extent: vk::Extent2D,
 }
 
-impl WindowEngine
-{
-	pub fn new<W: HasRawWindowHandle>(
-		context: &Context,
-		window: &W,
-	) -> MarsResult<Self> {
+impl WindowEngine {
+	pub fn new<W: HasRawWindowHandle>(context: &Context, window: &W) -> MarsResult<Self> {
 		let handle = window.raw_window_handle();
 		let surface = unsafe { Surface::create_from_raw_handle(&context.physical_device, handle).unwrap() };
 		let surface_info = unsafe { surface.get_info()? };
@@ -41,13 +40,14 @@ impl WindowEngine
 		})
 	}
 
-	pub fn present<F: FormatType>(&mut self, context: &Context, image: &Image<usage::TransferSrc, F>) -> MarsResult<Option<vk::Extent2D>> {
-		context.queue.with_lock(|| {
-			unsafe { self.presentation_engine.present(
-				&context.queue,
-				&image.image,
-			) }
-		})
+	pub fn present<F: FormatType>(
+		&mut self,
+		context: &Context,
+		image: &Image<usage::TransferSrc, F>,
+	) -> MarsResult<Option<vk::Extent2D>> {
+		context
+			.queue
+			.with_lock(|| unsafe { self.presentation_engine.present(&context.queue, &image.image) })
 	}
 
 	pub fn current_extent(&self) -> vk::Extent2D {

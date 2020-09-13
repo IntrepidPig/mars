@@ -11,8 +11,8 @@ use crate::{
 };
 
 pub use self::{
-	usage::{ImageUsageType, DynImageUsage},
-	format::{FormatType},
+	format::FormatType,
+	usage::{DynImageUsage, ImageUsageType},
 };
 
 /// An unique handle to an image stored on the GPU
@@ -90,7 +90,14 @@ where
 	}
 
 	pub fn make_image(context: &Context, usage: U, extent: vk::Extent2D, data: &[u8]) -> MarsResult<Self> {
-		let mut image = unsafe { Self::create_raw(context, usage.as_dyn() | DynImageUsage::TRANSFER_DST, F::as_raw(), extent)? };
+		let mut image = unsafe {
+			Self::create_raw(
+				context,
+				usage.as_dyn() | DynImageUsage::TRANSFER_DST,
+				F::as_raw(),
+				extent,
+			)?
+		};
 		image.transition(
 			context,
 			&ImageLayoutTransition {
@@ -156,8 +163,20 @@ where
 	}
 
 	pub(crate) unsafe fn cast_unchecked<U2: ImageUsageType, F2: FormatType>(self) -> Image<U2, F2> {
-		let Image { image, layout, extent, usage, _phantom } = self;
-		Image { image, layout, extent, usage, _phantom: PhantomData }
+		let Image {
+			image,
+			layout,
+			extent,
+			usage,
+			_phantom,
+		} = self;
+		Image {
+			image,
+			layout,
+			extent,
+			usage,
+			_phantom: PhantomData,
+		}
 	}
 
 	pub(crate) unsafe fn cast_unchecked_ref<U2: ImageUsageType, F2: FormatType>(&self) -> &Image<U2, F2> {
@@ -172,12 +191,7 @@ where
 	pub(crate) fn transition(&mut self, context: &Context, transition: &ImageLayoutTransition) -> MarsResult<()> {
 		unsafe {
 			context.queue.with_lock(|| {
-				rk::image::transition_image_layout(
-					&context.queue,
-					&context.command_pool,
-					&mut self.image,
-					transition,
-				)
+				rk::image::transition_image_layout(&context.queue, &context.command_pool, &mut self.image, transition)
 			})?;
 		};
 		self.layout = transition.new_layout;
@@ -194,7 +208,11 @@ pub struct ImageView<U: ImageUsageType, F: FormatType> {
 impl<U: ImageUsageType, F: FormatType> ImageView<U, F> {
 	pub fn create(image: &Image<U, F>) -> MarsResult<Self> {
 		let image_view = unsafe { RkImageView::create(&image.image, F::aspect())? };
-		Ok(Self { image_view, usage: image.usage, _phantom: PhantomData })
+		Ok(Self {
+			image_view,
+			usage: image.usage,
+			_phantom: PhantomData,
+		})
 	}
 
 	/// Returns all of the usages this image supports. (This may be more than the usage type
@@ -228,8 +246,16 @@ impl<U: ImageUsageType, F: FormatType> ImageView<U, F> {
 	}
 
 	pub(crate) unsafe fn cast_unchecked<U2: ImageUsageType, F2: FormatType>(self) -> ImageView<U2, F2> {
-		let Self { image_view, usage, _phantom } = self;
-		ImageView { image_view, usage, _phantom: PhantomData }
+		let Self {
+			image_view,
+			usage,
+			_phantom,
+		} = self;
+		ImageView {
+			image_view,
+			usage,
+			_phantom: PhantomData,
+		}
 	}
 
 	pub(crate) unsafe fn cast_unchecked_ref<U2: ImageUsageType, F2: FormatType>(&self) -> &ImageView<U2, F2> {
@@ -262,7 +288,11 @@ impl<F> SampledImage<F>
 where
 	F: FormatType,
 {
-	pub fn new(image: Image<usage::SampledImage, F>, image_view: ImageView<usage::SampledImage, F>, sampler: Sampler) -> Self {
+	pub fn new(
+		image: Image<usage::SampledImage, F>,
+		image_view: ImageView<usage::SampledImage, F>,
+		sampler: Sampler,
+	) -> Self {
 		Self {
 			image,
 			image_view,
@@ -296,7 +326,7 @@ pub mod usage {
 		fn as_dyn(self) -> DynImageUsage;
 		fn as_raw(self) -> vk::ImageUsageFlags;
 	}
-	
+
 	bitflags::bitflags! {
 		pub struct DynImageUsage: u32 {
 			const TRANSFER_SRC = vk::ImageUsageFlags::TRANSFER_SRC.as_raw();
@@ -308,34 +338,34 @@ pub mod usage {
 			const INPUT_ATTACHMENT = vk::ImageUsageFlags::INPUT_ATTACHMENT.as_raw();
 		}
 	}
-	
+
 	unsafe impl ImageUsageType for DynImageUsage {
 		fn as_dyn(self) -> DynImageUsage {
 			self
 		}
-	
+
 		fn as_raw(self) -> vk::ImageUsageFlags {
 			vk::ImageUsageFlags::from_raw(self.bits())
 		}
 	}
-	
+
 	macro_rules! image_usage {
 		($name:ident, $usage:ident) => {
 			#[derive(Debug, Copy, Clone)]
 			pub struct $name;
-	
+
 			unsafe impl ImageUsageType for $name {
 				fn as_dyn(self) -> DynImageUsage {
 					DynImageUsage::$usage
 				}
-	
+
 				fn as_raw(self) -> vk::ImageUsageFlags {
 					vk::ImageUsageFlags::$usage
 				}
 			}
 		};
 	}
-	
+
 	image_usage!(TransferSrc, TRANSFER_SRC);
 	image_usage!(TransferDst, TRANSFER_DST);
 	image_usage!(SampledImage, SAMPLED);

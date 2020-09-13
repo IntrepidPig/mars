@@ -19,7 +19,11 @@ pub struct Buffer<U: BufferUsageType, T: ?Sized> {
 	pub(crate) _phantom: PhantomData<(U, T)>,
 }
 
-impl<U, T> Buffer<U, [T]> where U: BufferUsageType, T: Copy {
+impl<U, T> Buffer<U, [T]>
+where
+	U: BufferUsageType,
+	T: Copy,
+{
 	pub fn make_array_buffer(context: &Context, data: &[T]) -> MarsResult<Self> {
 		assert!(data.len() > 0);
 		let buffer = unsafe { RkBuffer::make(&context.device, U::as_raw(), data)? };
@@ -34,20 +38,14 @@ impl<U, T> Buffer<U, [T]> where U: BufferUsageType, T: Copy {
 	pub fn map<'a>(&'a self) -> MarsResult<Map<'a, U, T>> {
 		unsafe {
 			let ptr = self.buffer.map()?;
-			Ok(Map {
-				buffer: self,
-				ptr,
-			})
+			Ok(Map { buffer: self, ptr })
 		}
 	}
 
 	pub fn map_mut<'a>(&'a mut self) -> MarsResult<MapMut<'a, U, T>> {
 		unsafe {
 			let ptr = self.buffer.map()?;
-			Ok(MapMut {
-				buffer: self,
-				ptr,
-			})
+			Ok(MapMut { buffer: self, ptr })
 		}
 	}
 
@@ -82,20 +80,14 @@ where
 	pub fn map<'a>(&'a self) -> MarsResult<ItemMap<'a, U, T>> {
 		unsafe {
 			let ptr = self.buffer.map()?;
-			Ok(ItemMap {
-				buffer: self,
-				ptr,
-			})
+			Ok(ItemMap { buffer: self, ptr })
 		}
 	}
 
 	pub fn map_mut<'a>(&'a mut self) -> MarsResult<ItemMapMut<'a, U, T>> {
 		unsafe {
 			let ptr = self.buffer.map()?;
-			Ok(ItemMapMut {
-				buffer: self,
-				ptr,
-			})
+			Ok(ItemMapMut { buffer: self, ptr })
 		}
 	}
 

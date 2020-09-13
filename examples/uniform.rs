@@ -3,10 +3,10 @@ use std::time::Instant;
 use mars::{
 	buffer::{Buffer, UniformBufferUsage},
 	function::{FunctionDef, FunctionImpl, FunctionPrototype},
-	pass::{RenderPass, subpasses::{SimpleSubpassPrototype}},
 	image::{format, usage, DynImageUsage},
-	target::{Target},
 	math::*,
+	pass::{subpasses::SimpleSubpassPrototype, RenderPass},
+	target::Target,
 	window::WindowEngine,
 	Context,
 };
@@ -61,15 +61,20 @@ fn main() {
 	let window = WindowBuilder::new().build(&event_loop).unwrap();
 
 	let context = Context::create("mars_uniform_example", rk::FirstPhysicalDeviceChooser).unwrap();
-	
+
 	let mut window_engine = WindowEngine::new(&context, &window).unwrap();
-	
+
 	let simple_subpass = SimpleSubpassPrototype::<format::B8G8R8A8Unorm, format::D32Sfloat>::new();
 	let render_pass = RenderPass::create(&context, &simple_subpass).unwrap();
-	
-	let attachments=  SimpleSubpassPrototype::create_attachments(&context, DynImageUsage::TRANSFER_SRC, window_engine.current_extent()).unwrap();
+
+	let attachments = SimpleSubpassPrototype::create_attachments(
+		&context,
+		DynImageUsage::TRANSFER_SRC,
+		window_engine.current_extent(),
+	)
+	.unwrap();
 	let mut target = Target::create(&context, &render_pass, attachments).unwrap();
-	
+
 	let vert_shader = compile_shader(VERTEX_SHADER, "vert.glsl", shaderc::ShaderKind::Vertex);
 	let frag_shader = compile_shader(FRAGMENT_SHADER, "frag.glsl", shaderc::ShaderKind::Fragment);
 	let function_impl = unsafe { FunctionImpl::<UniformFunction>::from_raw(vert_shader, frag_shader) };
@@ -89,11 +94,7 @@ fn main() {
 	let aspect = extent.width as f32 / extent.height as f32;
 	let mvp_buffer_a = Buffer::<UniformBufferUsage, _>::make_item_buffer(
 		&context,
-		create_mvp(
-			aspect,
-			Point3::new(1.0, -1.5, 0.0),
-			Vec3::new(0.0, 0.0, 0.0),
-		),
+		create_mvp(aspect, Point3::new(1.0, -1.5, 0.0), Vec3::new(0.0, 0.0, 0.0)),
 	)
 	.unwrap();
 	let mvp_buffer_b = Buffer::<UniformBufferUsage, _>::make_item_buffer(
@@ -102,12 +103,8 @@ fn main() {
 	)
 	.unwrap();
 
-	let mut set_a = function_def
-		.make_arguments(&context, (mvp_buffer_a,))
-		.unwrap();
-	let mut set_b = function_def
-		.make_arguments(&context, (mvp_buffer_b,))
-		.unwrap();
+	let mut set_a = function_def.make_arguments(&context, (mvp_buffer_a,)).unwrap();
+	let mut set_b = function_def.make_arguments(&context, (mvp_buffer_b,)).unwrap();
 
 	let start = Instant::now();
 	event_loop.run(move |event, _, control_flow| {
@@ -127,18 +124,46 @@ fn main() {
 			.with_map_mut(|map| *map = create_mvp(aspect, Point3::new(0.0, 0.0, 0.0), Vec3::new(t, t, t)))
 			.unwrap();
 
-		window_engine.render
+		window_engine
+			.render
 			.clear(&context, &mut target, &render_pass, Vec4::new(1.0, 1.0, 1.0, 1.0), 1.0)
 			.unwrap();
 		window_engine
 			.render
-			.draw(&context, &mut target, &render_pass, &function_def, &set_a, &vertex_buffer, &index_buffer)
+			.draw(
+				&context,
+				&mut target,
+				&render_pass,
+				&function_def,
+				&set_a,
+				&vertex_buffer,
+				&index_buffer,
+			)
 			.unwrap();
 		window_engine
 			.render
-			.draw(&context, &mut target, &render_pass, &function_def, &set_b, &vertex_buffer, &index_buffer)
+			.draw(
+				&context,
+				&mut target,
+				&render_pass,
+				&function_def,
+				&set_b,
+				&vertex_buffer,
+				&index_buffer,
+			)
 			.unwrap();
-		window_engine.present(&context, target.attachments().color_attachments.0.image.cast_usage_ref(usage::TransferSrc).unwrap()).unwrap();
+		window_engine
+			.present(
+				&context,
+				target
+					.attachments()
+					.color_attachments
+					.0
+					.image
+					.cast_usage_ref(usage::TransferSrc)
+					.unwrap(),
+			)
+			.unwrap();
 
 		match event {
 			Event::WindowEvent {

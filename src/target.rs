@@ -1,11 +1,8 @@
-use rk::{
-	pass::{Framebuffer},
-	vk,
-};
+use rk::{pass::Framebuffer, vk};
 
 use crate::{
+	pass::{Attachments, RenderPass, SubpassGraph},
 	Context, MarsResult,
-	pass::{RenderPass, SubpassGraph, Attachments},
 };
 
 pub struct Target<G: SubpassGraph> {

@@ -37,9 +37,15 @@ impl Context {
 	pub fn create<C: PhysicalDeviceChooser>(app_name: &str, chooser: C) -> Result<Self, ContextCreateError> {
 		let instance = create_instance(app_name)?;
 
-		let debug_messenger = rk::create_debug_report_callback(&instance, vk::DebugUtilsMessageSeverityFlagsEXT::all(), vk::DebugUtilsMessageTypeFlagsEXT::all(), None)
-			.map_err(|_| log::warn!("Failed to create debug report callback")).ok();
-		
+		let debug_messenger = rk::create_debug_report_callback(
+			&instance,
+			vk::DebugUtilsMessageSeverityFlagsEXT::all(),
+			vk::DebugUtilsMessageTypeFlagsEXT::all(),
+			None,
+		)
+		.map_err(|_| log::warn!("Failed to create debug report callback"))
+		.ok();
+
 		let physical_device =
 			rk::PhysicalDevice::choose(&instance, chooser).map_err(|_| ContextCreateError::NoDevice)?;
 		let (device, queue) = create_device(&physical_device)?;

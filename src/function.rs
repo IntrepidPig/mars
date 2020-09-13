@@ -1,19 +1,19 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use rk::{
-	vk,
-	device::{Device},
-	pipe::{Pipeline, PipelineLayout, DescriptorSetLayout},
 	descriptor::{DescriptorPool, DescriptorSet},
-	pass::{RenderPass as RkRenderPass},
-	shader::{ShaderModule},
+	device::Device,
+	pass::RenderPass as RkRenderPass,
+	pipe::{DescriptorSetLayout, Pipeline, PipelineLayout},
+	shader::ShaderModule,
+	vk,
 };
 
 use crate::{
-	Context, MarsResult,
 	buffer::{Buffer, UniformBufferUsage, UntypedBuffer},
 	image::{FormatType, SampledImage},
 	pass::{RenderPass, SubpassGraph},
+	Context, MarsResult,
 };
 
 pub trait FunctionPrototype {
@@ -48,8 +48,15 @@ pub struct FunctionDef<F: FunctionPrototype> {
 	_phantom: PhantomData<F>,
 }
 
-impl<F> FunctionDef<F> where F: FunctionPrototype {
-	pub fn create<G: SubpassGraph>(context: &Context, render_pass: &RenderPass<G>, function_impl: FunctionImpl<F>) -> MarsResult<Self> {
+impl<F> FunctionDef<F>
+where
+	F: FunctionPrototype,
+{
+	pub fn create<G: SubpassGraph>(
+		context: &Context,
+		render_pass: &RenderPass<G>,
+		function_impl: FunctionImpl<F>,
+	) -> MarsResult<Self> {
 		//let parameters = F::VertexInputs::parameters(); // TODO: multiple vertex bindings
 		let parameters = vec![ParameterDesc {
 			attributes: F::VertexInput::attributes(),
@@ -98,7 +105,6 @@ pub struct ArgumentsContainer<F: FunctionPrototype> {
 	pub arguments: <F::Bindings as Bindings>::Arguments,
 	pub(crate) descriptor_set: DescriptorSet,
 }
-
 
 /* fn compile_shader(source: &str, filename: &str, kind: shaderc::ShaderKind) -> Vec<u32> {
 	let mut compiler = shaderc::Compiler::new().expect("Failed to initialize compiler");
@@ -175,7 +181,6 @@ fn create_pipeline(
 
 	Ok((pipeline, pipeline_layout, descriptor_set_layout))
 }
-
 
 pub struct ParameterDesc {
 	pub attributes: Vec<AttributeDesc>,
