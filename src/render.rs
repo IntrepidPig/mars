@@ -6,8 +6,7 @@ use rk::{
 use crate::{
 	buffer::{Buffer, IndexBufferUsage, VertexBufferUsage},
 	function::{ArgumentsContainer, FunctionDef, FunctionPrototype},
-	math::*,
-	pass::{Attachments, RenderPass, SubpassGraph},
+	pass::{RenderPassPrototype, ColorAttachments, DepthAttachmentType},
 	target::Target,
 	Context, MarsResult,
 };
@@ -25,31 +24,30 @@ impl RenderEngine {
 		Ok(this)
 	}
 
-	pub fn clear<G: SubpassGraph>(
+	pub fn clear<G: RenderPassPrototype>(
 		&mut self,
 		context: &Context,
 		target: &mut Target<G>,
-		render_pass: &RenderPass<G>,
-		color: Vec4,
-		depth: f32,
+		colors: <G::ColorAttachments as ColorAttachments>::ClearValues,
+		depth: <G::DepthAttachment as DepthAttachmentType>::ClearValue,
 	) -> MarsResult<()> {
 		self.submit(context, |_this, command_buffer| {
 			unsafe {
 				command_buffer.begin_render_pass(
-					&render_pass.render_pass,
+					&target.render_pass.render_pass,
 					&target.framebuffer,
 					vk::Rect2D {
 						offset: vk::Offset2D { x: 0, y: 0 },
-						extent: target.extent,
+						extent: target.attachments.extent(),
 					},
 					&[],
 				)?;
-				let clear_attachments = target.attachments.clears(color, depth);
+				let clear_attachments = target.attachments.clears(colors, depth);
 				let clear_rects = vec![
 					vk::ClearRect {
 						rect: vk::Rect2D {
 							offset: vk::Offset2D { x: 0, y: 0 },
-							extent: target.extent,
+							extent: target.attachments.extent(),
 						},
 						base_array_layer: 0,
 						layer_count: 1,
@@ -64,11 +62,10 @@ impl RenderEngine {
 		})
 	}
 
-	pub fn draw<G: SubpassGraph, F: FunctionPrototype>(
+	pub fn pass<F: FunctionPrototype>(
 		&mut self,
 		context: &Context,
-		target: &mut Target<G>,
-		render_pass: &RenderPass<G>,
+		target: &mut Target<F::RenderPass>,
 		function: &FunctionDef<F>,
 		bindings: &ArgumentsContainer<F>,
 		vertices: &Buffer<VertexBufferUsage, [F::VertexInput]>,
@@ -77,27 +74,27 @@ impl RenderEngine {
 		self.submit(context, |_this, command_buffer| {
 			unsafe {
 				command_buffer.begin_render_pass(
-					&render_pass.render_pass,
+					&target.render_pass.render_pass,
 					&target.framebuffer,
 					vk::Rect2D {
 						offset: vk::Offset2D { x: 0, y: 0 },
-						extent: target.extent,
+						extent: target.attachments.extent,
 					},
 					&[],
 				)?;
 				command_buffer.set_viewport(vk::Viewport {
 					x: 0.0,
 					y: 0.0,
-					width: target.extent.width as f32,
-					height: target.extent.height as f32,
+					width: target.attachments.extent.width as f32,
+					height: target.attachments.extent.height as f32,
 					min_depth: 0.0,
 					max_depth: 1.0,
 				});
 				command_buffer.set_scissor(vk::Rect2D {
 					offset: vk::Offset2D { x: 0, y: 0 },
 					extent: vk::Extent2D {
-						width: target.extent.width,
-						height: target.extent.height,
+						width: target.attachments.extent.width,
+						height: target.attachments.extent.height,
 					},
 				});
 				command_buffer.bind_pipeline(vk::PipelineBindPoint::GRAPHICS, &function.pipeline);

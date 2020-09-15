@@ -12,11 +12,12 @@ use rk::{
 use crate::{
 	buffer::{Buffer, UniformBufferUsage, UntypedBuffer},
 	image::{FormatType, SampledImage},
-	pass::{RenderPass, SubpassGraph},
+	pass::{RenderPass, RenderPassPrototype},
 	Context, MarsResult,
 };
 
 pub trait FunctionPrototype {
+	type RenderPass: RenderPassPrototype;
 	type VertexInput: Parameter;
 	type Bindings: Bindings;
 }
@@ -52,9 +53,9 @@ impl<F> FunctionDef<F>
 where
 	F: FunctionPrototype,
 {
-	pub fn create<G: SubpassGraph>(
+	pub fn create(
 		context: &Context,
-		render_pass: &RenderPass<G>,
+		render_pass: &RenderPass<F::RenderPass>,
 		function_impl: FunctionImpl<F>,
 	) -> MarsResult<Self> {
 		//let parameters = F::VertexInputs::parameters(); // TODO: multiple vertex bindings

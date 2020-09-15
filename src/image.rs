@@ -377,18 +377,23 @@ pub mod usage {
 
 pub mod format {
 	use rk::vk;
+	use crate::math::*;
 
 	pub unsafe trait FormatType {
+		type Pixel;
+
 		fn as_raw() -> vk::Format;
 
 		fn aspect() -> vk::ImageAspectFlags;
 	}
 
 	macro_rules! format {
-		($name:ident, $raw:ident, $aspect:ident) => {
+		($name:ident, $raw:ident, $aspect:ident, $pixel:ty) => {
 			pub struct $name;
 
 			unsafe impl FormatType for $name {
+				type Pixel = $pixel;
+
 				fn as_raw() -> vk::Format {
 					vk::Format::$raw
 				}
@@ -400,10 +405,10 @@ pub mod format {
 		};
 	}
 
-	format!(B8G8R8A8Unorm, B8G8R8A8_UNORM, COLOR);
+	format!(B8G8R8A8Unorm, B8G8R8A8_UNORM, COLOR, Vec4);
 
-	format!(R8G8B8A8Unorm, R8G8B8A8_UNORM, COLOR);
-	format!(R8G8B8A8Srgb, R8G8B8A8_SRGB, COLOR);
+	format!(R8G8B8A8Unorm, R8G8B8A8_UNORM, COLOR, Vec4);
+	format!(R8G8B8A8Srgb, R8G8B8A8_SRGB, COLOR, Vec4);
 
-	format!(D32Sfloat, D32_SFLOAT, DEPTH);
+	format!(D32Sfloat, D32_SFLOAT, DEPTH, f32);
 }

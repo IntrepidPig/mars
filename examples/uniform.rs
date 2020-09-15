@@ -5,7 +5,7 @@ use mars::{
 	function::{FunctionDef, FunctionImpl, FunctionPrototype},
 	image::{format, usage, DynImageUsage},
 	math::*,
-	pass::{subpasses::SimpleSubpassPrototype, RenderPass},
+	pass::{RenderPass, RenderPassPrototype, ColorAttachment, DepthAttachment, Attachments},
 	target::Target,
 	window::WindowEngine,
 	Context,
@@ -49,14 +49,25 @@ void main() {
 }
 ";
 
+struct UniformPass;
+
+impl RenderPassPrototype for UniformPass {
+	type InputAttachments = ();
+	type ColorAttachments = (ColorAttachment<format::B8G8R8A8Unorm>,);
+	type DepthAttachment = DepthAttachment<format::D32Sfloat>;
+}
+
 struct UniformFunction;
 
 impl FunctionPrototype for UniformFunction {
+	type RenderPass = UniformPass;
 	type VertexInput = (Vec4, Vec4);
 	type Bindings = (Mvp,);
 }
 
 fn main() {
+	simple_logger::SimpleLogger::new().init().unwrap();
+
 	let event_loop = EventLoop::new();
 	let window = WindowBuilder::new().build(&event_loop).unwrap();
 
@@ -64,21 +75,14 @@ fn main() {
 
 	let mut window_engine = WindowEngine::new(&context, &window).unwrap();
 
-	let simple_subpass = SimpleSubpassPrototype::<format::B8G8R8A8Unorm, format::D32Sfloat>::new();
-	let render_pass = RenderPass::create(&context, &simple_subpass).unwrap();
-
-	let attachments = SimpleSubpassPrototype::create_attachments(
-		&context,
-		DynImageUsage::TRANSFER_SRC,
-		window_engine.current_extent(),
-	)
-	.unwrap();
-	let mut target = Target::create(&context, &render_pass, attachments).unwrap();
+	let render_pass = RenderPass::<UniformPass>::create(&context).unwrap();
+	let attachments = Attachments::create(&context, window_engine.current_extent(), DynImageUsage::TRANSFER_SRC).unwrap();
+	let mut target = Target::create(&context, render_pass, attachments).unwrap();
 
 	let vert_shader = compile_shader(VERTEX_SHADER, "vert.glsl", shaderc::ShaderKind::Vertex);
 	let frag_shader = compile_shader(FRAGMENT_SHADER, "frag.glsl", shaderc::ShaderKind::Fragment);
 	let function_impl = unsafe { FunctionImpl::<UniformFunction>::from_raw(vert_shader, frag_shader) };
-	let mut function_def = FunctionDef::create(&context, &render_pass, function_impl).unwrap();
+	let mut function_def = FunctionDef::create(&context, target.render_pass(), function_impl).unwrap();
 
 	let vertices = [
 		(Vec4::new(-0.5, 0.5, 0.0, 1.0), Vec4::new(1.0, 0.0, 0.0, 1.0)),
@@ -126,14 +130,13 @@ fn main() {
 
 		window_engine
 			.render
-			.clear(&context, &mut target, &render_pass, Vec4::new(1.0, 1.0, 1.0, 1.0), 1.0)
+			.clear(&context, &mut target, (Vec4::new(1.0, 1.0, 1.0, 1.0),), 1.0)
 			.unwrap();
 		window_engine
 			.render
-			.draw(
+			.pass(
 				&context,
 				&mut target,
-				&render_pass,
 				&function_def,
 				&set_a,
 				&vertex_buffer,
@@ -142,28 +145,31 @@ fn main() {
 			.unwrap();
 		window_engine
 			.render
-			.draw(
+			.pass(
 				&context,
 				&mut target,
-				&render_pass,
 				&function_def,
 				&set_b,
 				&vertex_buffer,
 				&index_buffer,
 			)
 			.unwrap();
-		window_engine
+		
+		if let Some(new_extent) = window_engine
 			.present(
 				&context,
 				target
-					.attachments()
-					.color_attachments
+					.color_attachments()
 					.0
 					.image
 					.cast_usage_ref(usage::TransferSrc)
 					.unwrap(),
 			)
-			.unwrap();
+			.unwrap()
+		{
+			let attachments = Attachments::create(&context, new_extent, DynImageUsage::TRANSFER_SRC).unwrap();
+			target.change_attachments(&context, attachments).unwrap();
+		}
 
 		match event {
 			Event::WindowEvent {

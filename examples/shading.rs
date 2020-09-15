@@ -5,7 +5,7 @@ use mars::{
 	function::{FunctionDef, FunctionImpl, FunctionPrototype},
 	image::{format, usage, DynImageUsage},
 	math::*,
-	pass::{subpasses::SimpleSubpassPrototype, RenderPass},
+	pass::{RenderPass, RenderPassPrototype, Attachments, ColorAttachment, DepthAttachment},
 	target::Target,
 	window::WindowEngine,
 	Context,
@@ -92,9 +92,18 @@ void main() {
 }
 ";
 
+struct ShadingPass;
+
+impl RenderPassPrototype for ShadingPass {
+	type InputAttachments = ();
+	type ColorAttachments = (ColorAttachment<format::R8G8B8A8Unorm>,);
+	type DepthAttachment = DepthAttachment<format::D32Sfloat>;
+}
+
 struct CubeShadingFunction;
 
 impl FunctionPrototype for CubeShadingFunction {
+	type RenderPass = ShadingPass;
 	type VertexInput = (Vec3, Vec3);
 	type Bindings = (Mvp, Vec3);
 }
@@ -102,6 +111,7 @@ impl FunctionPrototype for CubeShadingFunction {
 struct LightShadingFunction;
 
 impl FunctionPrototype for LightShadingFunction {
+	type RenderPass = ShadingPass;
 	type VertexInput = (Vec3, Vec3);
 	type Bindings = (Mvp,);
 }
@@ -116,28 +126,21 @@ fn main() {
 
 	let mut window_engine = WindowEngine::new(&context, &window).unwrap();
 
-	let simple_subpass = SimpleSubpassPrototype::<format::B8G8R8A8Unorm, format::D32Sfloat>::new();
-	let render_pass = RenderPass::create(&context, &simple_subpass).unwrap();
-
-	let attachments = SimpleSubpassPrototype::create_attachments(
-		&context,
-		DynImageUsage::TRANSFER_SRC,
-		window_engine.current_extent(),
-	)
-	.unwrap();
-	let mut target = Target::create(&context, &render_pass, attachments).unwrap();
+	let render_pass = RenderPass::<ShadingPass>::create(&context).unwrap();
+	let attachments = Attachments::create(&context, window_engine.current_extent(), DynImageUsage::TRANSFER_SRC).unwrap();
+	let mut target = Target::create(&context, render_pass, attachments).unwrap();
 
 	let cube_vert_shader = compile_shader(CUBE_VERTEX_SHADER, "vert.glsl", shaderc::ShaderKind::Vertex);
 	let cube_frag_shader = compile_shader(CUBE_FRAGMENT_SHADER, "frag.glsl", shaderc::ShaderKind::Fragment);
 	let cube_function_impl =
 		unsafe { FunctionImpl::<CubeShadingFunction>::from_raw(cube_vert_shader, cube_frag_shader) };
-	let mut cube_function_def = FunctionDef::create(&context, &render_pass, cube_function_impl).unwrap();
+	let mut cube_function_def = FunctionDef::create(&context, target.render_pass(), cube_function_impl).unwrap();
 
 	let light_vert_shader = compile_shader(LIGHT_VERTEX_SHADER, "vert.glsl", shaderc::ShaderKind::Vertex);
 	let light_frag_shader = compile_shader(LIGHT_FRAGMENT_SHADER, "frag.glsl", shaderc::ShaderKind::Fragment);
 	let light_function_impl =
 		unsafe { FunctionImpl::<LightShadingFunction>::from_raw(light_vert_shader, light_frag_shader) };
-	let mut light_function_def = FunctionDef::create(&context, &render_pass, light_function_impl).unwrap();
+	let mut light_function_def = FunctionDef::create(&context, target.render_pass(), light_function_impl).unwrap();
 
 	#[rustfmt::skip]
 	let vertices: [(Vec3, Vec3); 36] = [
@@ -243,14 +246,13 @@ fn main() {
 
 		window_engine
 			.render
-			.clear(&context, &mut target, &render_pass, Vec4::new(0.3, 0.3, 0.3, 0.3), 1.0)
+			.clear(&context, &mut target, (Vec4::new(0.3, 0.3, 0.3, 0.3),), 1.0)
 			.unwrap();
 		window_engine
 			.render
-			.draw(
+			.pass(
 				&context,
 				&mut target,
-				&render_pass,
 				&cube_function_def,
 				&cube_arguments,
 				&vertex_buffer,
@@ -259,28 +261,31 @@ fn main() {
 			.unwrap();
 		window_engine
 			.render
-			.draw(
+			.pass(
 				&context,
 				&mut target,
-				&render_pass,
 				&light_function_def,
 				&light_arguments,
 				&vertex_buffer,
 				&index_buffer,
 			)
 			.unwrap();
-		window_engine
+		
+		if let Some(new_extent) = window_engine
 			.present(
 				&context,
 				target
-					.attachments()
-					.color_attachments
+					.color_attachments()
 					.0
 					.image
 					.cast_usage_ref(usage::TransferSrc)
 					.unwrap(),
 			)
-			.unwrap();
+			.unwrap()
+		{
+			let attachments = Attachments::create(&context, new_extent, DynImageUsage::TRANSFER_SRC).unwrap();
+			target.change_attachments(&context, attachments).unwrap();
+		}
 
 		match event {
 			Event::WindowEvent {

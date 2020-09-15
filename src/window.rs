@@ -48,6 +48,10 @@ impl WindowEngine {
 		context
 			.queue
 			.with_lock(|| unsafe { self.presentation_engine.present(&context.queue, &image.image) })
+			.map(|opt| opt.map(|new_extent| {
+				self.current_extent = new_extent;
+				new_extent
+			}))
 	}
 
 	pub fn current_extent(&self) -> vk::Extent2D {
