@@ -5,7 +5,7 @@ use mars::{
 	function::{FunctionDef, FunctionImpl, FunctionPrototype},
 	image::{format, usage, DynImageUsage},
 	math::*,
-	pass::{RenderPass, RenderPassPrototype, Attachments, ColorAttachment, DepthAttachment},
+	pass::{Attachments, ColorAttachment, DepthAttachment, RenderPass, RenderPassPrototype},
 	target::Target,
 	window::WindowEngine,
 	Context,
@@ -127,20 +127,21 @@ fn main() {
 	let mut window_engine = WindowEngine::new(&context, &window).unwrap();
 
 	let render_pass = RenderPass::<ShadingPass>::create(&context).unwrap();
-	let attachments = Attachments::create(&context, window_engine.current_extent(), DynImageUsage::TRANSFER_SRC).unwrap();
-	let mut target = Target::create(&context, render_pass, attachments).unwrap();
+	let attachments =
+		Attachments::create(&context, window_engine.current_extent(), DynImageUsage::TRANSFER_SRC).unwrap();
+	let mut target = Target::create(&context, &render_pass, attachments).unwrap();
 
 	let cube_vert_shader = compile_shader(CUBE_VERTEX_SHADER, "vert.glsl", shaderc::ShaderKind::Vertex);
 	let cube_frag_shader = compile_shader(CUBE_FRAGMENT_SHADER, "frag.glsl", shaderc::ShaderKind::Fragment);
 	let cube_function_impl =
 		unsafe { FunctionImpl::<CubeShadingFunction>::from_raw(cube_vert_shader, cube_frag_shader) };
-	let mut cube_function_def = FunctionDef::create(&context, target.render_pass(), cube_function_impl).unwrap();
+	let mut cube_function_def = FunctionDef::create(&context, &render_pass, cube_function_impl).unwrap();
 
 	let light_vert_shader = compile_shader(LIGHT_VERTEX_SHADER, "vert.glsl", shaderc::ShaderKind::Vertex);
 	let light_frag_shader = compile_shader(LIGHT_FRAGMENT_SHADER, "frag.glsl", shaderc::ShaderKind::Fragment);
 	let light_function_impl =
 		unsafe { FunctionImpl::<LightShadingFunction>::from_raw(light_vert_shader, light_frag_shader) };
-	let mut light_function_def = FunctionDef::create(&context, target.render_pass(), light_function_impl).unwrap();
+	let mut light_function_def = FunctionDef::create(&context, &render_pass, light_function_impl).unwrap();
 
 	#[rustfmt::skip]
 	let vertices: [(Vec3, Vec3); 36] = [
@@ -270,7 +271,7 @@ fn main() {
 				&index_buffer,
 			)
 			.unwrap();
-		
+
 		if let Some(new_extent) = window_engine
 			.present(
 				&context,

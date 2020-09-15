@@ -41,7 +41,8 @@ where
 	}
 }
 
-fn get_render_pass_desc<G: RenderPassPrototype>() -> (Vec<pass::Attachment>, Vec<pass::Subpass>, Vec<pass::Dependency>) {
+fn get_render_pass_desc<G: RenderPassPrototype>() -> (Vec<pass::Attachment>, Vec<pass::Subpass>, Vec<pass::Dependency>)
+{
 	let mut attachments = Vec::new();
 	let mut input_refs = Vec::new();
 	let mut color_refs = Vec::new();
@@ -102,7 +103,10 @@ pub struct Attachments<G: RenderPassPrototype> {
 	pub(crate) depth_attachment: G::DepthAttachment,
 }
 
-impl<G> Attachments<G> where G: RenderPassPrototype {
+impl<G> Attachments<G>
+where
+	G: RenderPassPrototype,
+{
 	// TODO: allow more granular specification of usages
 	pub fn create(context: &Context, extent: vk::Extent2D, color_usages: DynImageUsage) -> MarsResult<Self> {
 		let input_attachments = G::InputAttachments::create(context, DynImageUsage::empty(), extent)?;
@@ -133,16 +137,21 @@ impl<G> Attachments<G> where G: RenderPassPrototype {
 	}
 
 	pub(crate) fn as_raw(&self) -> Vec<Arc<RkImageViewInner>> {
-		self.input_attachments.as_raw().into_iter()
-			.chain(self.color_attachments.as_raw().into_iter()
-				.map(|(color, resolve)| {
-					if let Some(resolve) = resolve {
-						vec![color, resolve]
-					} else {
-						vec![color]
-					}
-				})
-				.flatten()
+		self.input_attachments
+			.as_raw()
+			.into_iter()
+			.chain(
+				self.color_attachments
+					.as_raw()
+					.into_iter()
+					.map(|(color, resolve)| {
+						if let Some(resolve) = resolve {
+							vec![color, resolve]
+						} else {
+							vec![color]
+						}
+					})
+					.flatten(),
 			)
 			.chain(self.depth_attachment().as_raw().into_iter())
 			.collect()
@@ -151,7 +160,7 @@ impl<G> Attachments<G> where G: RenderPassPrototype {
 	pub(crate) fn clears(
 		&self,
 		colors: <G::ColorAttachments as ColorAttachments>::ClearValues,
-		depth: <G::DepthAttachment as DepthAttachmentType>::ClearValue
+		depth: <G::DepthAttachment as DepthAttachmentType>::ClearValue,
 	) -> Vec<vk::ClearAttachment> {
 		let mut clear_attachments = Vec::new();
 		let input_attachments_count = G::InputAttachments::desc().len() as u32;
@@ -221,7 +230,7 @@ pub unsafe trait ColorAttachmentType: Sized {
 	fn as_raw(&self) -> (Arc<RkImageViewInner>, Option<Arc<RkImageViewInner>>);
 
 	fn clear(&self, color: Vec4) -> (vk::ClearValue, Option<vk::ClearValue>);
-	
+
 	fn create(context: &Context, usages: DynImageUsage, extent: vk::Extent2D) -> MarsResult<Self>;
 }
 
@@ -244,7 +253,7 @@ where
 unsafe impl<F> ColorAttachmentType for ColorAttachment<F>
 where
 	F: FormatType,
-	F::Pixel: ColorClearValue
+	F::Pixel: ColorClearValue,
 {
 	type ClearValue = F::Pixel;
 
@@ -506,13 +515,20 @@ impl ColorClearValues for () {
 	}
 }
 
-impl<A> ColorClearValues for (A,) where A: ColorClearValue {
+impl<A> ColorClearValues for (A,)
+where
+	A: ColorClearValue,
+{
 	fn as_raw(&self) -> Vec<vk::ClearColorValue> {
 		vec![self.0.as_raw()]
 	}
 }
 
-impl<A, B> ColorClearValues for (A, B) where A: ColorClearValue, B: ColorClearValue {
+impl<A, B> ColorClearValues for (A, B)
+where
+	A: ColorClearValue,
+	B: ColorClearValue,
+{
 	fn as_raw(&self) -> Vec<vk::ClearColorValue> {
 		vec![self.0.as_raw(), self.1.as_raw()]
 	}

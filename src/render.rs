@@ -6,7 +6,7 @@ use rk::{
 use crate::{
 	buffer::{Buffer, IndexBufferUsage, VertexBufferUsage},
 	function::{ArgumentsContainer, FunctionDef, FunctionPrototype},
-	pass::{RenderPassPrototype, ColorAttachments, DepthAttachmentType},
+	pass::{ColorAttachments, DepthAttachmentType, RenderPassPrototype},
 	target::Target,
 	Context, MarsResult,
 };
@@ -34,7 +34,7 @@ impl RenderEngine {
 		self.submit(context, |_this, command_buffer| {
 			unsafe {
 				command_buffer.begin_render_pass(
-					&target.render_pass.render_pass,
+					&target.render_pass,
 					&target.framebuffer,
 					vk::Rect2D {
 						offset: vk::Offset2D { x: 0, y: 0 },
@@ -74,7 +74,7 @@ impl RenderEngine {
 		self.submit(context, |_this, command_buffer| {
 			unsafe {
 				command_buffer.begin_render_pass(
-					&target.render_pass.render_pass,
+					&target.render_pass,
 					&target.framebuffer,
 					vk::Rect2D {
 						offset: vk::Offset2D { x: 0, y: 0 },

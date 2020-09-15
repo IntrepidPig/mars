@@ -376,8 +376,8 @@ pub mod usage {
 }
 
 pub mod format {
-	use rk::vk;
 	use crate::math::*;
+	use rk::vk;
 
 	pub unsafe trait FormatType {
 		type Pixel;

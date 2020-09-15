@@ -3,7 +3,7 @@ use mars::{
 	function::{FunctionDef, FunctionImpl, FunctionPrototype},
 	image::{format, usage, DynImageUsage},
 	math::*,
-	pass::{RenderPass, RenderPassPrototype, Attachments, ColorAttachment, NoDepthAttachment},
+	pass::{Attachments, ColorAttachment, NoDepthAttachment, RenderPass, RenderPassPrototype},
 	target::Target,
 	window::WindowEngine,
 	Context,
@@ -69,12 +69,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	let render_pass = RenderPass::<TrianglePass>::create(&context)?;
 	let attachments = Attachments::create(&context, window_engine.current_extent(), DynImageUsage::TRANSFER_SRC)?;
-	let mut target = Target::create(&context, render_pass, attachments)?;
+	let mut target = Target::create(&context, &render_pass, attachments)?;
 
 	let vert_shader = compile_shader(TRIANGLE_VERTEX_SHADER, "vert.glsl", shaderc::ShaderKind::Vertex)?;
 	let frag_shader = compile_shader(TRIANGLE_FRAGMENT_SHADER, "frag.glsl", shaderc::ShaderKind::Fragment)?;
 	let function_impl = unsafe { FunctionImpl::<TriangleFunction>::from_raw(vert_shader, frag_shader) };
-	let mut function_def = FunctionDef::create(&context, target.render_pass(), function_impl)?;
+	let mut function_def = FunctionDef::create(&context, &render_pass, function_impl)?;
 
 	let vertices = [
 		(Vec4::new(-0.5, 0.5, 0.0, 1.0), Vec4::new(1.0, 0.0, 0.0, 1.0)),

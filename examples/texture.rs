@@ -5,7 +5,7 @@ use mars::{
 	function::{FunctionDef, FunctionImpl, FunctionPrototype},
 	image::{format, usage, DynImageUsage, Image, SampledImage},
 	math::*,
-	pass::{RenderPass, RenderPassPrototype, Attachments, ColorAttachment, NoDepthAttachment},
+	pass::{Attachments, ColorAttachment, NoDepthAttachment, RenderPass, RenderPassPrototype},
 	target::Target,
 	vk,
 	window::WindowEngine,
@@ -70,7 +70,7 @@ impl FunctionPrototype for TextureFunction {
 
 fn main() {
 	simple_logger::SimpleLogger::new().init().unwrap();
-	
+
 	let event_loop = EventLoop::new();
 	let window = WindowBuilder::new().build(&event_loop).unwrap();
 
@@ -79,13 +79,14 @@ fn main() {
 	let mut window_engine = WindowEngine::new(&context, &window).unwrap();
 
 	let render_pass = RenderPass::<TexturePass>::create(&context).unwrap();
-	let attachments = Attachments::create(&context, window_engine.current_extent(), DynImageUsage::TRANSFER_SRC).unwrap();
-	let mut target = Target::create(&context, render_pass, attachments).unwrap();
+	let attachments =
+		Attachments::create(&context, window_engine.current_extent(), DynImageUsage::TRANSFER_SRC).unwrap();
+	let mut target = Target::create(&context, &render_pass, attachments).unwrap();
 
 	let vert_shader = compile_shader(VERTEX_SHADER, "vert.glsl", shaderc::ShaderKind::Vertex);
 	let frag_shader = compile_shader(FRAGMENT_SHADER, "frag.glsl", shaderc::ShaderKind::Fragment);
 	let function_impl = unsafe { FunctionImpl::<TextureFunction>::from_raw(vert_shader, frag_shader) };
-	let mut function_def = FunctionDef::create(&context, target.render_pass(), function_impl).unwrap();
+	let mut function_def = FunctionDef::create(&context, &render_pass, function_impl).unwrap();
 
 	let vertices = [
 		(Vec2::new(-0.5, -0.5), Vec2::new(0.0, 0.0)),
@@ -144,7 +145,7 @@ fn main() {
 				&index_buffer,
 			)
 			.unwrap();
-		
+
 		if let Some(new_extent) = window_engine
 			.present(
 				&context,

@@ -1,18 +1,21 @@
-use rk::{pass::Framebuffer};
+use std::sync::Arc;
+
+use rk::pass::{Framebuffer, RenderPassInner};
 
 use crate::{
-	pass::{RenderPass, RenderPassPrototype, Attachments},
+	pass::{Attachments, RenderPass, RenderPassPrototype},
 	Context, MarsResult,
 };
 
 pub struct Target<G: RenderPassPrototype> {
-	pub(crate) render_pass: RenderPass<G>,
+	pub(crate) render_pass: Arc<RenderPassInner>,
 	pub(crate) attachments: Attachments<G>,
 	pub(crate) framebuffer: Framebuffer,
 }
 
 impl<G: RenderPassPrototype> Target<G> {
-	pub fn create(context: &Context, render_pass: RenderPass<G>, attachments: Attachments<G>) -> MarsResult<Self> {
+	pub fn create(context: &Context, render_pass: &RenderPass<G>, attachments: Attachments<G>) -> MarsResult<Self> {
+		let render_pass = render_pass.render_pass.clone();
 		let framebuffer = Self::create_framebuffer(context, &render_pass, &attachments)?;
 		Ok(Self {
 			render_pass,
@@ -27,10 +30,6 @@ impl<G: RenderPassPrototype> Target<G> {
 		Ok(())
 	}
 
-	pub fn render_pass(&self) -> &RenderPass<G> {
-		&self.render_pass
-	}
-
 	pub fn attachments(&self) -> &Attachments<G> {
 		&self.attachments
 	}
@@ -39,10 +38,14 @@ impl<G: RenderPassPrototype> Target<G> {
 		&self.attachments.color_attachments
 	}
 
-	fn create_framebuffer(context: &Context, render_pass: &RenderPass<G>, attachments: &Attachments<G>) -> MarsResult<Framebuffer> {
+	fn create_framebuffer(
+		context: &Context,
+		render_pass: &Arc<RenderPassInner>,
+		attachments: &Attachments<G>,
+	) -> MarsResult<Framebuffer> {
 		let extent = attachments.extent();
 		context.device.create_framebuffer(
-			&render_pass.render_pass,
+			render_pass,
 			attachments.as_raw(),
 			extent.width,
 			extent.height,
