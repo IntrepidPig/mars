@@ -7,15 +7,16 @@ use rk::{
 };
 
 use crate::{
-	image::{usage, DynImageUsage, FormatType, Image, ImageView},
+	image::{usage, samples::{SampleCount1}, SampleCountType, MultiSampleCountType, DynImageUsage, FormatType, Image, ImageView},
 	math::*,
 	Context, MarsResult,
 };
 
 pub trait RenderPassPrototype {
+	type SampleCount: SampleCountType;
 	type InputAttachments: InputAttachments;
-	type ColorAttachments: ColorAttachments;
-	type DepthAttachment: DepthAttachmentType;
+	type ColorAttachments: ColorAttachments<Self::SampleCount>;
+	type DepthAttachment: DepthAttachmentType<Self::SampleCount>;
 }
 
 pub struct RenderPass<G: RenderPassPrototype> {
@@ -61,6 +62,9 @@ fn get_render_pass_desc<G: RenderPassPrototype>() -> (Vec<pass::Attachment>, Vec
 	let colors = G::ColorAttachments::desc();
 	for (color, resolve) in &colors {
 		attachments.push(*color);
+		if let Some(resolve) = resolve {
+			attachments.push(*resolve);
+		}
 		color_refs.push(pass::ColorAttachment {
 			color: pass::AttachmentRef {
 				attachment: index,
@@ -88,10 +92,10 @@ fn get_render_pass_desc<G: RenderPassPrototype>() -> (Vec<pass::Attachment>, Vec
 	}
 
 	let subpass = pass::Subpass {
-		input_attachments: input_refs,
-		color_attachments: color_refs,
-		depth_stencil_attachment: depth_ref,
-	};
+			input_attachments: input_refs,
+			color_attachments: color_refs,
+			depth_stencil_attachment: depth_ref,
+		};
 
 	(attachments, vec![subpass], Vec::new())
 }
@@ -159,8 +163,8 @@ where
 
 	pub(crate) fn clears(
 		&self,
-		colors: <G::ColorAttachments as ColorAttachments>::ClearValues,
-		depth: <G::DepthAttachment as DepthAttachmentType>::ClearValue,
+		colors: <G::ColorAttachments as ColorAttachments<G::SampleCount>>::ClearValues,
+		depth: <G::DepthAttachment as DepthAttachmentType<G::SampleCount>>::ClearValue,
 	) -> Vec<vk::ClearAttachment> {
 		let mut clear_attachments = Vec::new();
 		let input_attachments_count = G::InputAttachments::desc().len() as u32;
@@ -222,14 +226,12 @@ unsafe impl InputAttachments for () {
 	buf
 } */
 
-pub unsafe trait ColorAttachmentType: Sized {
+pub unsafe trait ColorAttachmentType<S: SampleCountType>: Sized {
 	type ClearValue: ColorClearValue;
 
 	fn desc() -> (pass::Attachment, Option<pass::Attachment>);
 
 	fn as_raw(&self) -> (Arc<RkImageViewInner>, Option<Arc<RkImageViewInner>>);
-
-	fn clear(&self, color: Vec4) -> (vk::ClearValue, Option<vk::ClearValue>);
 
 	fn create(context: &Context, usages: DynImageUsage, extent: vk::Extent2D) -> MarsResult<Self>;
 }
@@ -237,20 +239,20 @@ pub unsafe trait ColorAttachmentType: Sized {
 // TODO: use a subtrait that ensures the format is a color format
 pub struct ColorAttachment<F: FormatType> {
 	// TODO: make not pub and add getters instead
-	pub image: Image<usage::ColorAttachment, F>,
-	pub view: ImageView<usage::ColorAttachment, F>,
+	pub image: Image<usage::ColorAttachment, F, SampleCount1>,
+	pub view: ImageView<usage::ColorAttachment, F, SampleCount1>,
 }
 
 impl<F> ColorAttachment<F>
 where
 	F: FormatType,
 {
-	pub(crate) fn new(image: Image<usage::ColorAttachment, F>, view: ImageView<usage::ColorAttachment, F>) -> Self {
+	pub(crate) fn new(image: Image<usage::ColorAttachment, F, SampleCount1>, view: ImageView<usage::ColorAttachment, F, SampleCount1>) -> Self {
 		Self { image, view }
 	}
 }
 
-unsafe impl<F> ColorAttachmentType for ColorAttachment<F>
+unsafe impl<F> ColorAttachmentType<SampleCount1> for ColorAttachment<F>
 where
 	F: FormatType,
 	F::Pixel: ColorClearValue,
@@ -258,6 +260,7 @@ where
 	type ClearValue = F::Pixel;
 
 	fn desc() -> (pass::Attachment, Option<pass::Attachment>) {
+		// TODO: implement subtype traits for formats and image usages to avoid these asserts
 		assert!(F::aspect().contains(vk::ImageAspectFlags::COLOR));
 
 		(
@@ -279,7 +282,7 @@ where
 		(self.view.image_view.clone(), None)
 	}
 
-	fn clear(&self, color: Vec4) -> (vk::ClearValue, Option<vk::ClearValue>) {
+	/* fn clear(&self, color: Vec4) -> (vk::ClearValue, Option<vk::ClearValue>) {
 		(
 			vk::ClearValue {
 				color: vk::ClearColorValue {
@@ -288,7 +291,7 @@ where
 			},
 			None,
 		)
-	}
+	} */
 
 	fn create(context: &Context, usage: DynImageUsage, extent: vk::Extent2D) -> MarsResult<Self> {
 		let mut image = Image::create(context, usage | DynImageUsage::COLOR_ATTACHMENT, extent)?;
@@ -310,19 +313,103 @@ where
 	}
 }
 
-pub unsafe trait ColorAttachments: Sized {
+pub struct MultisampledColorAttachment<F: FormatType, S: MultiSampleCountType> {
+	// TODO: fields not pub for fear of user changing them to wrongly-sized images
+	#[allow(unused)]
+	pub color_image: Image<usage::ColorAttachment, F, S>,
+	pub color_image_view: ImageView<usage::ColorAttachment, F, S>,
+	#[allow(unused)]
+	pub resolve_image: Image<usage::ColorAttachment, F, SampleCount1>,
+	pub resolve_image_view: ImageView<usage::ColorAttachment, F, SampleCount1>,
+}
+
+unsafe impl<F, S> ColorAttachmentType<S> for MultisampledColorAttachment<F, S> where F: FormatType, F::Pixel: ColorClearValue, S: MultiSampleCountType {
+    type ClearValue = F::Pixel;
+
+    fn desc() -> (pass::Attachment, Option<pass::Attachment>) {
+		assert!(F::aspect().contains(vk::ImageAspectFlags::COLOR));
+
+		(
+			pass::Attachment {
+				format: F::as_raw(),
+				samples: S::as_raw(),
+				load_op: vk::AttachmentLoadOp::LOAD,
+				store_op: vk::AttachmentStoreOp::STORE,
+				stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
+				stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
+				initial_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+				final_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+			},
+			Some(pass::Attachment {
+				format: F::as_raw(),
+				samples: vk::SampleCountFlags::TYPE_1,
+				load_op: vk::AttachmentLoadOp::LOAD,
+				store_op: vk::AttachmentStoreOp::STORE,
+				stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,
+				stencil_store_op: vk::AttachmentStoreOp::DONT_CARE,
+				initial_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+				final_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+			}),
+		)
+    }
+
+    fn as_raw(&self) -> (Arc<RkImageViewInner>, Option<Arc<RkImageViewInner>>) {
+        (self.color_image_view.image_view.clone(), Some(self.resolve_image_view.image_view.clone()))
+    }
+
+    fn create(context: &Context, usages: DynImageUsage, extent: vk::Extent2D) -> MarsResult<Self> {
+        let mut color_image = Image::create(context, usages | DynImageUsage::COLOR_ATTACHMENT, extent)?;
+		color_image.transition(
+			context,
+			&ImageLayoutTransition {
+				aspect: vk::ImageAspectFlags::COLOR,
+				src_stage_mask: vk::PipelineStageFlags::TOP_OF_PIPE,
+				dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+				src_access_mask: vk::AccessFlags::empty(),
+				dst_access_mask: vk::AccessFlags::MEMORY_READ,
+				old_layout: vk::ImageLayout::UNDEFINED,
+				new_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+			},
+		)?;
+		let color_image = color_image.cast_usage(usage::ColorAttachment).map_err(|_| ()).unwrap();
+		let color_image_view = ImageView::create(&color_image)?;
+		let mut resolve_image = Image::create(context, usages | DynImageUsage::COLOR_ATTACHMENT, extent)?;
+		resolve_image.transition(
+			context,
+			&ImageLayoutTransition {
+				aspect: vk::ImageAspectFlags::COLOR,
+				src_stage_mask: vk::PipelineStageFlags::TOP_OF_PIPE,
+				dst_stage_mask: vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+				src_access_mask: vk::AccessFlags::empty(),
+				dst_access_mask: vk::AccessFlags::MEMORY_READ,
+				old_layout: vk::ImageLayout::UNDEFINED,
+				new_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+			},
+		)?;
+		let resolve_image = resolve_image.cast_usage(usage::ColorAttachment).map_err(|_| ()).unwrap();
+		let resolve_image_view = ImageView::create(&resolve_image)?;
+		Ok(Self {
+			color_image,
+			color_image_view,
+			resolve_image,
+			resolve_image_view,
+		})
+    }
+}
+
+pub unsafe trait ColorAttachments<S: SampleCountType>: Sized {
 	type ClearValues: ColorClearValues;
 
 	fn desc() -> Vec<(pass::Attachment, Option<pass::Attachment>)>;
 
 	fn as_raw(&self) -> Vec<(Arc<RkImageViewInner>, Option<Arc<RkImageViewInner>>)>;
 
-	fn clears(&self, color: Vec4) -> Vec<(vk::ClearValue, Option<vk::ClearValue>)>;
+	//fn clears(&self, color: Vec4) -> Vec<(vk::ClearValue, Option<vk::ClearValue>)>;
 
 	fn create(context: &Context, usages: DynImageUsage, extent: vk::Extent2D) -> MarsResult<Self>;
 }
 
-unsafe impl ColorAttachments for () {
+unsafe impl<S: SampleCountType> ColorAttachments<S> for () {
 	type ClearValues = ();
 
 	fn desc() -> Vec<(pass::Attachment, Option<pass::Attachment>)> {
@@ -333,18 +420,19 @@ unsafe impl ColorAttachments for () {
 		Vec::new()
 	}
 
-	fn clears(&self, _color: Vec4) -> Vec<(vk::ClearValue, Option<vk::ClearValue>)> {
+	/* fn clears(&self, _color: Vec4) -> Vec<(vk::ClearValue, Option<vk::ClearValue>)> {
 		Vec::new()
-	}
+	} */
 
 	fn create(_context: &Context, _usages: DynImageUsage, _extent: vk::Extent2D) -> MarsResult<Self> {
 		Ok(())
 	}
 }
 
-unsafe impl<A> ColorAttachments for (A,)
+unsafe impl<S, A> ColorAttachments<S> for (A,)
 where
-	A: ColorAttachmentType,
+	S: SampleCountType,
+	A: ColorAttachmentType<S>,
 {
 	type ClearValues = (A::ClearValue,);
 
@@ -356,19 +444,20 @@ where
 		vec![self.0.as_raw()]
 	}
 
-	fn clears(&self, color: Vec4) -> Vec<(vk::ClearValue, Option<vk::ClearValue>)> {
+	/* fn clears(&self, color: Vec4) -> Vec<(vk::ClearValue, Option<vk::ClearValue>)> {
 		vec![self.0.clear(color)]
-	}
+	} */
 
 	fn create(context: &Context, usages: DynImageUsage, extent: vk::Extent2D) -> MarsResult<Self> {
 		Ok((A::create(context, usages, extent)?,))
 	}
 }
 
-unsafe impl<A, B> ColorAttachments for (A, B)
+unsafe impl<S, A, B> ColorAttachments<S> for (A, B)
 where
-	A: ColorAttachmentType,
-	B: ColorAttachmentType,
+	S: SampleCountType,
+	A: ColorAttachmentType<S>,
+	B: ColorAttachmentType<S>,
 {
 	type ClearValues = (A::ClearValue, B::ClearValue);
 
@@ -380,16 +469,16 @@ where
 		vec![self.0.as_raw(), self.1.as_raw()]
 	}
 
-	fn clears(&self, color: Vec4) -> Vec<(vk::ClearValue, Option<vk::ClearValue>)> {
+	/* fn clears(&self, color: Vec4) -> Vec<(vk::ClearValue, Option<vk::ClearValue>)> {
 		vec![self.0.clear(color), self.1.clear(color)]
-	}
+	} */
 
 	fn create(context: &Context, usages: DynImageUsage, extent: vk::Extent2D) -> MarsResult<Self> {
 		Ok((A::create(context, usages, extent)?, B::create(context, usages, extent)?))
 	}
 }
 
-pub unsafe trait DepthAttachmentType: Sized {
+pub unsafe trait DepthAttachmentType<S: SampleCountType>: Sized {
 	type ClearValue: DepthClearValue;
 
 	fn desc() -> Option<pass::Attachment>;
@@ -403,7 +492,7 @@ pub unsafe trait DepthAttachmentType: Sized {
 
 pub struct NoDepthAttachment;
 
-unsafe impl DepthAttachmentType for NoDepthAttachment {
+unsafe impl<S> DepthAttachmentType<S> for NoDepthAttachment where S: SampleCountType {
 	type ClearValue = ();
 
 	fn desc() -> Option<pass::Attachment> {
@@ -423,27 +512,29 @@ unsafe impl DepthAttachmentType for NoDepthAttachment {
 	}
 }
 
-pub struct DepthAttachment<F: FormatType> {
-	pub image: Image<usage::DepthStencilAttachment, F>,
-	pub view: ImageView<usage::DepthStencilAttachment, F>,
+pub struct DepthAttachment<F: FormatType, S: SampleCountType> {
+	pub image: Image<usage::DepthStencilAttachment, F, S>,
+	pub view: ImageView<usage::DepthStencilAttachment, F, S>,
 }
 
-impl<F> DepthAttachment<F>
+impl<F, S> DepthAttachment<F, S>
 where
 	F: FormatType,
+	S: SampleCountType
 {
 	pub(crate) fn new(
-		image: Image<usage::DepthStencilAttachment, F>,
-		view: ImageView<usage::DepthStencilAttachment, F>,
+		image: Image<usage::DepthStencilAttachment, F, S>,
+		view: ImageView<usage::DepthStencilAttachment, F, S>,
 	) -> Self {
 		Self { image, view }
 	}
 }
 
-unsafe impl<F> DepthAttachmentType for DepthAttachment<F>
+unsafe impl<F, S> DepthAttachmentType<S> for DepthAttachment<F, S>
 where
 	F: FormatType,
 	F::Pixel: DepthClearValue,
+	S: SampleCountType,
 {
 	type ClearValue = F::Pixel;
 
@@ -452,7 +543,7 @@ where
 
 		Some(pass::Attachment {
 			format: F::as_raw(),
-			samples: vk::SampleCountFlags::TYPE_1,
+			samples: S::as_raw(),
 			load_op: vk::AttachmentLoadOp::LOAD,
 			store_op: vk::AttachmentStoreOp::STORE,
 			stencil_load_op: vk::AttachmentLoadOp::DONT_CARE,

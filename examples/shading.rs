@@ -3,9 +3,9 @@ use std::time::Instant;
 use mars::{
 	buffer::Buffer,
 	function::{FunctionDef, FunctionImpl, FunctionPrototype},
-	image::{format, usage, DynImageUsage},
+	image::{format, usage, DynImageUsage, samples::{SampleCount8}},
 	math::*,
-	pass::{Attachments, ColorAttachment, DepthAttachment, RenderPass, RenderPassPrototype},
+	pass::{Attachments, MultisampledColorAttachment, DepthAttachment, RenderPass, RenderPassPrototype},
 	target::Target,
 	window::WindowEngine,
 	Context,
@@ -95,9 +95,10 @@ void main() {
 struct ShadingPass;
 
 impl RenderPassPrototype for ShadingPass {
+	type SampleCount = SampleCount8;
 	type InputAttachments = ();
-	type ColorAttachments = (ColorAttachment<format::R8G8B8A8Unorm>,);
-	type DepthAttachment = DepthAttachment<format::D32Sfloat>;
+	type ColorAttachments = (MultisampledColorAttachment<format::R8G8B8A8Unorm, Self::SampleCount>,);
+	type DepthAttachment = DepthAttachment<format::D32Sfloat, Self::SampleCount>;
 }
 
 struct CubeShadingFunction;
@@ -278,7 +279,7 @@ fn main() {
 				target
 					.color_attachments()
 					.0
-					.image
+					.resolve_image
 					.cast_usage_ref(usage::TransferSrc)
 					.unwrap(),
 			)

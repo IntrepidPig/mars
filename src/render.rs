@@ -28,8 +28,8 @@ impl RenderEngine {
 		&mut self,
 		context: &Context,
 		target: &mut Target<G>,
-		colors: <G::ColorAttachments as ColorAttachments>::ClearValues,
-		depth: <G::DepthAttachment as DepthAttachmentType>::ClearValue,
+		colors: <G::ColorAttachments as ColorAttachments<G::SampleCount>>::ClearValues,
+		depth: <G::DepthAttachment as DepthAttachmentType<G::SampleCount>>::ClearValue,
 	) -> MarsResult<()> {
 		self.submit(context, |_this, command_buffer| {
 			unsafe {

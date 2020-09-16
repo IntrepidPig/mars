@@ -11,8 +11,8 @@ use rk::{
 
 use crate::{
 	buffer::{Buffer, UniformBufferUsage, UntypedBuffer},
-	image::{FormatType, SampledImage},
-	pass::{RenderPass, RenderPassPrototype},
+	image::{FormatType, SampledImage, SampleCountType},
+	pass::{RenderPass, RenderPassPrototype, ColorAttachments},
 	Context, MarsResult,
 };
 
@@ -66,12 +66,16 @@ where
 		let bindings = F::Bindings::descriptions();
 		let descriptor_pool = create_descriptor_pool(&context.device, &bindings)?;
 		let descriptor_bindings = bindings_descs_to_raw(&bindings);
+		let color_blend_states = create_blend_states::<F::RenderPass>();
+		let multisample_state = create_multisample_state::<F::RenderPass>();
 		let (pipeline, pipeline_layout, descriptor_set_layout) = create_pipeline(
 			&context.device,
 			&render_pass.render_pass,
 			vertex_bindings,
 			vertex_attributes,
 			descriptor_bindings,
+			&color_blend_states,
+			&multisample_state,
 			&function_impl.vert,
 			&function_impl.frag,
 		)?;
@@ -142,12 +146,39 @@ fn create_descriptor_pool(device: &Device, binding_descs: &[BindingDesc]) -> Mar
 	Ok(pool)
 }
 
+// TODO: make blend states customizable
+fn create_blend_states<G: RenderPassPrototype>() -> Vec<vk::PipelineColorBlendAttachmentState> {
+	let default = vk::PipelineColorBlendAttachmentState::builder()
+		.blend_enable(true)
+		.src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+		.dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+		.color_blend_op(vk::BlendOp::ADD)
+		.src_alpha_blend_factor(vk::BlendFactor::ONE)
+		.dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+		.alpha_blend_op(vk::BlendOp::ADD)
+		.color_write_mask(vk::ColorComponentFlags::all())
+		.build();
+	let amount = <G::ColorAttachments as ColorAttachments<G::SampleCount>>::desc().len();
+	vec![default; amount]
+}
+
+fn create_multisample_state<G: RenderPassPrototype>() -> vk::PipelineMultisampleStateCreateInfo {
+	vk::PipelineMultisampleStateCreateInfo::builder()
+		.rasterization_samples(G::SampleCount::as_raw())
+		.sample_shading_enable(false)
+		.alpha_to_coverage_enable(false)
+		.alpha_to_one_enable(false)
+		.build()
+}
+
 fn create_pipeline(
 	device: &Device,
 	render_pass: &RkRenderPass,
 	vertex_binding_descs: Vec<vk::VertexInputBindingDescription>,
 	vertex_attribute_descs: Vec<vk::VertexInputAttributeDescription>,
 	binding_descs: Vec<vk::DescriptorSetLayoutBinding>,
+	color_blend_attachment_states: &[vk::PipelineColorBlendAttachmentState],
+	multisample_state: &vk::PipelineMultisampleStateCreateInfo,
 	vert_spirv: &[u32],
 	frag_spirv: &[u32],
 ) -> MarsResult<(Pipeline, PipelineLayout, DescriptorSetLayout)> {
@@ -155,16 +186,7 @@ fn create_pipeline(
 	let fragment_shader = create_shader_module(device, &frag_spirv);
 	let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
 		.logic_op_enable(false)
-		.attachments(&[vk::PipelineColorBlendAttachmentState::builder()
-			.blend_enable(true)
-			.src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
-			.dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
-			.color_blend_op(vk::BlendOp::ADD)
-			.src_alpha_blend_factor(vk::BlendFactor::ONE)
-			.dst_alpha_blend_factor(vk::BlendFactor::ZERO)
-			.alpha_blend_op(vk::BlendOp::ADD)
-			.color_write_mask(vk::ColorComponentFlags::all())
-			.build()])
+		.attachments(color_blend_attachment_states)
 		.blend_constants([1.0, 1.0, 1.0, 1.0])
 		.build();
 	let descriptor_set_layout = device.create_descriptor_set_layout(&binding_descs)?;
@@ -175,6 +197,7 @@ fn create_pipeline(
 		&vertex_attribute_descs,
 		&fragment_shader,
 		&color_blend_state,
+		multisample_state,
 		&pipeline_layout,
 		render_pass,
 		0,

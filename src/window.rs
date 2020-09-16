@@ -6,7 +6,7 @@ use rk::{
 };
 
 use crate::{
-	image::{usage, FormatType, Image},
+	image::{usage, FormatType, Image, SampleCount1},
 	render::RenderEngine,
 	Context, MarsResult,
 };
@@ -43,7 +43,7 @@ impl WindowEngine {
 	pub fn present<F: FormatType>(
 		&mut self,
 		context: &Context,
-		image: &Image<usage::TransferSrc, F>,
+		image: &Image<usage::TransferSrc, F, SampleCount1>,
 	) -> MarsResult<Option<vk::Extent2D>> {
 		context
 			.queue

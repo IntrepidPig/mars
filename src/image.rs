@@ -13,6 +13,7 @@ use crate::{
 pub use self::{
 	format::FormatType,
 	usage::{DynImageUsage, ImageUsageType},
+	samples::{SampleCountType, MultiSampleCountType, SampleCount1},
 };
 
 /// An unique handle to an image stored on the GPU
@@ -42,18 +43,19 @@ pub use self::{
 /// for casting formats at this time, and the exact type of the format is always known (that is,
 /// there is no `DynImageUsage` analog for image formats). However, this may change in the future,
 /// depending on API requirements.
-pub struct Image<U: ImageUsageType, F: FormatType> {
+pub struct Image<U: ImageUsageType, F: FormatType, S: SampleCountType> {
 	pub(crate) image: RkImage,
 	pub(crate) layout: vk::ImageLayout,
 	pub(crate) extent: vk::Extent2D,
 	pub(crate) usage: DynImageUsage,
-	_phantom: PhantomData<(U, F)>,
+	_phantom: PhantomData<(U, F, S)>,
 }
 
-impl<U, F> Image<U, F>
+impl<U, F, S> Image<U, F, S>
 where
 	U: ImageUsageType,
 	F: FormatType,
+	S: SampleCountType
 {
 	pub(crate) unsafe fn create_raw(
 		context: &Context,
@@ -72,6 +74,7 @@ where
 			format,
 			extent3d,
 			usage.as_raw(),
+			S::as_raw(),
 			vk::ImageLayout::UNDEFINED,
 			vk::MemoryPropertyFlags::DEVICE_LOCAL,
 		)?;
@@ -138,7 +141,7 @@ where
 		self.extent
 	}
 
-	pub fn cast_usage<U2: ImageUsageType>(self, usage: U2) -> Result<Image<U2, F>, Self> {
+	pub fn cast_usage<U2: ImageUsageType>(self, usage: U2) -> Result<Image<U2, F, S>, Self> {
 		if self.usage.as_dyn().contains(usage.as_dyn()) {
 			Ok(unsafe { self.cast_unchecked() })
 		} else {
@@ -146,7 +149,7 @@ where
 		}
 	}
 
-	pub fn cast_usage_ref<U2: ImageUsageType>(&self, usage: U2) -> Option<&Image<U2, F>> {
+	pub fn cast_usage_ref<U2: ImageUsageType>(&self, usage: U2) -> Option<&Image<U2, F, S>> {
 		if self.usage.as_dyn().contains(usage.as_dyn()) {
 			Some(unsafe { self.cast_unchecked_ref() })
 		} else {
@@ -154,7 +157,7 @@ where
 		}
 	}
 
-	pub fn cast_usage_mut<U2: ImageUsageType>(&mut self, usage: U2) -> Option<&mut Image<U2, F>> {
+	pub fn cast_usage_mut<U2: ImageUsageType>(&mut self, usage: U2) -> Option<&mut Image<U2, F, S>> {
 		if self.usage.as_dyn().contains(usage.as_dyn()) {
 			Some(unsafe { self.cast_unchecked_mut() })
 		} else {
@@ -162,7 +165,7 @@ where
 		}
 	}
 
-	pub(crate) unsafe fn cast_unchecked<U2: ImageUsageType, F2: FormatType>(self) -> Image<U2, F2> {
+	pub(crate) unsafe fn cast_unchecked<U2: ImageUsageType, F2: FormatType, S2: SampleCountType>(self) -> Image<U2, F2, S2> {
 		let Image {
 			image,
 			layout,
@@ -179,12 +182,12 @@ where
 		}
 	}
 
-	pub(crate) unsafe fn cast_unchecked_ref<U2: ImageUsageType, F2: FormatType>(&self) -> &Image<U2, F2> {
-		&*(self as *const Self as *const Image<U2, F2>)
+	pub(crate) unsafe fn cast_unchecked_ref<U2: ImageUsageType, F2: FormatType, S2: SampleCountType>(&self) -> &Image<U2, F2, S2> {
+		&*(self as *const Self as *const Image<U2, F2, S2>)
 	}
 
-	pub(crate) unsafe fn cast_unchecked_mut<U2: ImageUsageType, F2: FormatType>(&mut self) -> &mut Image<U2, F2> {
-		&mut *(self as *mut Self as *mut Image<U2, F2>)
+	pub(crate) unsafe fn cast_unchecked_mut<U2: ImageUsageType, F2: FormatType, S2: SampleCountType>(&mut self) -> &mut Image<U2, F2, S2> {
+		&mut *(self as *mut Self as *mut Image<U2, F2, S2>)
 	}
 
 	// TODO: worry about image synchronization
@@ -199,14 +202,14 @@ where
 	}
 }
 
-pub struct ImageView<U: ImageUsageType, F: FormatType> {
+pub struct ImageView<U: ImageUsageType, F: FormatType, S: SampleCountType> {
 	pub(crate) image_view: RkImageView,
 	pub(crate) usage: DynImageUsage,
-	_phantom: PhantomData<(U, F)>,
+	_phantom: PhantomData<(U, F, S)>,
 }
 
-impl<U: ImageUsageType, F: FormatType> ImageView<U, F> {
-	pub fn create(image: &Image<U, F>) -> MarsResult<Self> {
+impl<U, F, S> ImageView<U, F, S> where U: ImageUsageType, F: FormatType, S: SampleCountType {
+	pub fn create(image: &Image<U, F, S>) -> MarsResult<Self> {
 		let image_view = unsafe { RkImageView::create(&image.image, F::aspect())? };
 		Ok(Self {
 			image_view,
@@ -221,7 +224,7 @@ impl<U: ImageUsageType, F: FormatType> ImageView<U, F> {
 		self.usage
 	}
 
-	pub fn cast_usage<U2: ImageUsageType>(self, usage: U2) -> Result<ImageView<U2, F>, Self> {
+	pub fn cast_usage<U2: ImageUsageType>(self, usage: U2) -> Result<ImageView<U2, F, S>, Self> {
 		if self.usage.as_dyn().contains(usage.as_dyn()) {
 			Ok(unsafe { self.cast_unchecked() })
 		} else {
@@ -229,7 +232,7 @@ impl<U: ImageUsageType, F: FormatType> ImageView<U, F> {
 		}
 	}
 
-	pub fn cast_usage_ref<U2: ImageUsageType>(&self, usage: U2) -> Option<&ImageView<U2, F>> {
+	pub fn cast_usage_ref<U2: ImageUsageType>(&self, usage: U2) -> Option<&ImageView<U2, F, S>> {
 		if self.usage.as_dyn().contains(usage.as_dyn()) {
 			Some(unsafe { self.cast_unchecked_ref() })
 		} else {
@@ -237,7 +240,7 @@ impl<U: ImageUsageType, F: FormatType> ImageView<U, F> {
 		}
 	}
 
-	pub fn cast_usage_mut<U2: ImageUsageType>(&mut self, usage: U2) -> Option<&mut ImageView<U2, F>> {
+	pub fn cast_usage_mut<U2: ImageUsageType>(&mut self, usage: U2) -> Option<&mut ImageView<U2, F, S>> {
 		if self.usage.as_dyn().contains(usage.as_dyn()) {
 			Some(unsafe { self.cast_unchecked_mut() })
 		} else {
@@ -245,7 +248,7 @@ impl<U: ImageUsageType, F: FormatType> ImageView<U, F> {
 		}
 	}
 
-	pub(crate) unsafe fn cast_unchecked<U2: ImageUsageType, F2: FormatType>(self) -> ImageView<U2, F2> {
+	pub(crate) unsafe fn cast_unchecked<U2: ImageUsageType, F2: FormatType, S2: SampleCountType>(self) -> ImageView<U2, F2, S2> {
 		let Self {
 			image_view,
 			usage,
@@ -258,12 +261,12 @@ impl<U: ImageUsageType, F: FormatType> ImageView<U, F> {
 		}
 	}
 
-	pub(crate) unsafe fn cast_unchecked_ref<U2: ImageUsageType, F2: FormatType>(&self) -> &ImageView<U2, F2> {
-		&*(self as *const Self as *const ImageView<U2, F2>)
+	pub(crate) unsafe fn cast_unchecked_ref<U2: ImageUsageType, F2: FormatType, S2: SampleCountType>(&self) -> &ImageView<U2, F2, S2> {
+		&*(self as *const Self as *const ImageView<U2, F2, S2>)
 	}
 
-	pub(crate) unsafe fn cast_unchecked_mut<U2: ImageUsageType, F2: FormatType>(&mut self) -> &mut ImageView<U2, F2> {
-		&mut *(self as *mut Self as *mut ImageView<U2, F2>)
+	pub(crate) unsafe fn cast_unchecked_mut<U2: ImageUsageType, F2: FormatType, S2: SampleCountType>(&mut self) -> &mut ImageView<U2, F2, S2> {
+		&mut *(self as *mut Self as *mut ImageView<U2, F2, S2>)
 	}
 }
 
@@ -279,8 +282,8 @@ impl Sampler {
 }
 
 pub struct SampledImage<F: FormatType> {
-	pub image: Image<usage::SampledImage, F>,
-	pub image_view: ImageView<usage::SampledImage, F>,
+	pub image: Image<usage::SampledImage, F, SampleCount1>,
+	pub image_view: ImageView<usage::SampledImage, F, SampleCount1>,
 	pub sampler: Sampler,
 }
 
@@ -289,8 +292,8 @@ where
 	F: FormatType,
 {
 	pub fn new(
-		image: Image<usage::SampledImage, F>,
-		image_view: ImageView<usage::SampledImage, F>,
+		image: Image<usage::SampledImage, F, SampleCount1>,
+		image_view: ImageView<usage::SampledImage, F, SampleCount1>,
 		sampler: Sampler,
 	) -> Self {
 		Self {
@@ -300,7 +303,7 @@ where
 		}
 	}
 
-	pub fn create(context: &Context, mut image: Image<usage::SampledImage, F>) -> MarsResult<Self> {
+	pub fn create(context: &Context, mut image: Image<usage::SampledImage, F, SampleCount1>) -> MarsResult<Self> {
 		if image.layout != vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL {
 			let transition = ImageLayoutTransition {
 				aspect: F::aspect(),
@@ -380,6 +383,9 @@ pub mod format {
 	use rk::vk;
 
 	pub unsafe trait FormatType {
+		// TODO: this is not what I mean by pixel. Right now for R8G8B8A8 this is defined as Vec4,
+		// when technically it should be a [u8; 4] by the name. The only purpose for this right now
+		// is for clear values, so maybe the name should be changed to something like that.
 		type Pixel;
 
 		fn as_raw() -> vk::Format;
@@ -411,4 +417,35 @@ pub mod format {
 	format!(R8G8B8A8Srgb, R8G8B8A8_SRGB, COLOR, Vec4);
 
 	format!(D32Sfloat, D32_SFLOAT, DEPTH, f32);
+}
+
+pub mod samples {
+	use rk::vk;
+
+	pub trait SampleCountType {
+		fn as_raw() -> vk::SampleCountFlags;
+	}
+
+	pub trait MultiSampleCountType: SampleCountType { }
+	
+	macro_rules! sample {
+		($name:ident, $val:ident, multi) => {
+			sample!($name, $val);
+
+			impl MultiSampleCountType for $name { }
+		};
+		($name:ident, $val:ident) => {
+			pub struct $name;
+	
+			impl SampleCountType for $name {
+				fn as_raw() -> vk::SampleCountFlags { vk::SampleCountFlags::$val }
+			}
+		};
+	}
+	
+	sample!(SampleCount1, TYPE_1);
+	sample!(SampleCount2, TYPE_2, multi);
+	sample!(SampleCount4, TYPE_4, multi);
+	sample!(SampleCount8, TYPE_8, multi);
+	sample!(SampleCount16, TYPE_16, multi);
 }

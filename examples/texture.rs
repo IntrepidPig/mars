@@ -3,9 +3,9 @@ use std::time::Instant;
 use mars::{
 	buffer::Buffer,
 	function::{FunctionDef, FunctionImpl, FunctionPrototype},
-	image::{format, usage, DynImageUsage, Image, SampledImage},
+	image::{format, usage, DynImageUsage, Image, SampledImage, samples::{SampleCount8}},
 	math::*,
-	pass::{Attachments, ColorAttachment, NoDepthAttachment, RenderPass, RenderPassPrototype},
+	pass::{Attachments, MultisampledColorAttachment, NoDepthAttachment, RenderPass, RenderPassPrototype},
 	target::Target,
 	vk,
 	window::WindowEngine,
@@ -55,8 +55,9 @@ void main() {
 struct TexturePass;
 
 impl RenderPassPrototype for TexturePass {
+	type SampleCount = SampleCount8;
 	type InputAttachments = ();
-	type ColorAttachments = (ColorAttachment<format::B8G8R8A8Unorm>,);
+	type ColorAttachments = (MultisampledColorAttachment<format::B8G8R8A8Unorm, Self::SampleCount>,);
 	type DepthAttachment = NoDepthAttachment;
 }
 
@@ -152,7 +153,7 @@ fn main() {
 				target
 					.color_attachments()
 					.0
-					.image
+					.resolve_image
 					.cast_usage_ref(usage::TransferSrc)
 					.unwrap(),
 			)

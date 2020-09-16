@@ -1,7 +1,7 @@
 use mars::{
 	buffer::Buffer,
 	function::{FunctionDef, FunctionImpl, FunctionPrototype},
-	image::{format, usage, DynImageUsage},
+	image::{format, usage, SampleCount1, DynImageUsage},
 	math::*,
 	pass::{Attachments, ColorAttachment, NoDepthAttachment, RenderPass, RenderPassPrototype},
 	target::Target,
@@ -44,6 +44,7 @@ void main() {
 struct TrianglePass;
 
 impl RenderPassPrototype for TrianglePass {
+	type SampleCount = SampleCount1;
 	type InputAttachments = ();
 	type ColorAttachments = (ColorAttachment<format::B8G8R8A8Unorm>,);
 	type DepthAttachment = NoDepthAttachment;

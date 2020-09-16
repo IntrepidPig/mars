@@ -3,9 +3,9 @@ use std::time::Instant;
 use mars::{
 	buffer::{Buffer, UniformBufferUsage},
 	function::{FunctionDef, FunctionImpl, FunctionPrototype},
-	image::{format, usage, DynImageUsage},
+	image::{format, usage, DynImageUsage, SampleCount1},
 	math::*,
-	pass::{Attachments, ColorAttachment, DepthAttachment, RenderPass, RenderPassPrototype},
+	pass::{Attachments, DepthAttachment, RenderPass, RenderPassPrototype, ColorAttachment},
 	target::Target,
 	window::WindowEngine,
 	Context,
@@ -52,9 +52,10 @@ void main() {
 struct UniformPass;
 
 impl RenderPassPrototype for UniformPass {
+	type SampleCount = SampleCount1;
 	type InputAttachments = ();
 	type ColorAttachments = (ColorAttachment<format::B8G8R8A8Unorm>,);
-	type DepthAttachment = DepthAttachment<format::D32Sfloat>;
+	type DepthAttachment = DepthAttachment<format::D32Sfloat, Self::SampleCount>;
 }
 
 struct UniformFunction;
