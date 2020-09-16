@@ -190,7 +190,21 @@ where
 		&mut *(self as *mut Self as *mut Image<U2, F2, S2>)
 	}
 
-	// TODO: worry about image synchronization
+	pub unsafe fn from_raw(&mut self, raw: RkImage, usage: U, extent: vk::Extent2D, layout: vk::ImageLayout) -> Self {
+		Self {
+		    image: raw,
+		    layout,
+		    extent,
+		    usage: usage.as_dyn(),
+		    _phantom: PhantomData,
+		}
+	}
+
+	pub unsafe fn raw(&self) -> &RkImage {
+		&self.image
+	}
+
+	// TODO: worry about image synchronization... or don't
 	pub(crate) fn transition(&mut self, context: &Context, transition: &ImageLayoutTransition) -> MarsResult<()> {
 		unsafe {
 			context.queue.with_lock(|| {
@@ -422,7 +436,7 @@ pub mod format {
 pub mod samples {
 	use rk::vk;
 
-	pub trait SampleCountType {
+	pub unsafe trait SampleCountType {
 		fn as_raw() -> vk::SampleCountFlags;
 	}
 
@@ -437,7 +451,7 @@ pub mod samples {
 		($name:ident, $val:ident) => {
 			pub struct $name;
 	
-			impl SampleCountType for $name {
+			unsafe impl SampleCountType for $name {
 				fn as_raw() -> vk::SampleCountFlags { vk::SampleCountFlags::$val }
 			}
 		};
