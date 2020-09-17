@@ -12,8 +12,8 @@ use crate::{
 
 pub use self::{
 	format::FormatType,
+	samples::{MultiSampleCountType, SampleCount1, SampleCountType},
 	usage::{DynImageUsage, ImageUsageType},
-	samples::{SampleCountType, MultiSampleCountType, SampleCount1},
 };
 
 /// An unique handle to an image stored on the GPU
@@ -55,7 +55,7 @@ impl<U, F, S> Image<U, F, S>
 where
 	U: ImageUsageType,
 	F: FormatType,
-	S: SampleCountType
+	S: SampleCountType,
 {
 	pub(crate) unsafe fn create_raw(
 		context: &Context,
@@ -165,7 +165,9 @@ where
 		}
 	}
 
-	pub(crate) unsafe fn cast_unchecked<U2: ImageUsageType, F2: FormatType, S2: SampleCountType>(self) -> Image<U2, F2, S2> {
+	pub(crate) unsafe fn cast_unchecked<U2: ImageUsageType, F2: FormatType, S2: SampleCountType>(
+		self,
+	) -> Image<U2, F2, S2> {
 		let Image {
 			image,
 			layout,
@@ -182,21 +184,25 @@ where
 		}
 	}
 
-	pub(crate) unsafe fn cast_unchecked_ref<U2: ImageUsageType, F2: FormatType, S2: SampleCountType>(&self) -> &Image<U2, F2, S2> {
+	pub(crate) unsafe fn cast_unchecked_ref<U2: ImageUsageType, F2: FormatType, S2: SampleCountType>(
+		&self,
+	) -> &Image<U2, F2, S2> {
 		&*(self as *const Self as *const Image<U2, F2, S2>)
 	}
 
-	pub(crate) unsafe fn cast_unchecked_mut<U2: ImageUsageType, F2: FormatType, S2: SampleCountType>(&mut self) -> &mut Image<U2, F2, S2> {
+	pub(crate) unsafe fn cast_unchecked_mut<U2: ImageUsageType, F2: FormatType, S2: SampleCountType>(
+		&mut self,
+	) -> &mut Image<U2, F2, S2> {
 		&mut *(self as *mut Self as *mut Image<U2, F2, S2>)
 	}
 
 	pub unsafe fn from_raw(&mut self, raw: RkImage, usage: U, extent: vk::Extent2D, layout: vk::ImageLayout) -> Self {
 		Self {
-		    image: raw,
-		    layout,
-		    extent,
-		    usage: usage.as_dyn(),
-		    _phantom: PhantomData,
+			image: raw,
+			layout,
+			extent,
+			usage: usage.as_dyn(),
+			_phantom: PhantomData,
 		}
 	}
 
@@ -222,7 +228,12 @@ pub struct ImageView<U: ImageUsageType, F: FormatType, S: SampleCountType> {
 	_phantom: PhantomData<(U, F, S)>,
 }
 
-impl<U, F, S> ImageView<U, F, S> where U: ImageUsageType, F: FormatType, S: SampleCountType {
+impl<U, F, S> ImageView<U, F, S>
+where
+	U: ImageUsageType,
+	F: FormatType,
+	S: SampleCountType,
+{
 	pub fn create(image: &Image<U, F, S>) -> MarsResult<Self> {
 		let image_view = unsafe { RkImageView::create(&image.image, F::aspect())? };
 		Ok(Self {
@@ -262,7 +273,9 @@ impl<U, F, S> ImageView<U, F, S> where U: ImageUsageType, F: FormatType, S: Samp
 		}
 	}
 
-	pub(crate) unsafe fn cast_unchecked<U2: ImageUsageType, F2: FormatType, S2: SampleCountType>(self) -> ImageView<U2, F2, S2> {
+	pub(crate) unsafe fn cast_unchecked<U2: ImageUsageType, F2: FormatType, S2: SampleCountType>(
+		self,
+	) -> ImageView<U2, F2, S2> {
 		let Self {
 			image_view,
 			usage,
@@ -275,11 +288,15 @@ impl<U, F, S> ImageView<U, F, S> where U: ImageUsageType, F: FormatType, S: Samp
 		}
 	}
 
-	pub(crate) unsafe fn cast_unchecked_ref<U2: ImageUsageType, F2: FormatType, S2: SampleCountType>(&self) -> &ImageView<U2, F2, S2> {
+	pub(crate) unsafe fn cast_unchecked_ref<U2: ImageUsageType, F2: FormatType, S2: SampleCountType>(
+		&self,
+	) -> &ImageView<U2, F2, S2> {
 		&*(self as *const Self as *const ImageView<U2, F2, S2>)
 	}
 
-	pub(crate) unsafe fn cast_unchecked_mut<U2: ImageUsageType, F2: FormatType, S2: SampleCountType>(&mut self) -> &mut ImageView<U2, F2, S2> {
+	pub(crate) unsafe fn cast_unchecked_mut<U2: ImageUsageType, F2: FormatType, S2: SampleCountType>(
+		&mut self,
+	) -> &mut ImageView<U2, F2, S2> {
 		&mut *(self as *mut Self as *mut ImageView<U2, F2, S2>)
 	}
 }
@@ -440,23 +457,25 @@ pub mod samples {
 		fn as_raw() -> vk::SampleCountFlags;
 	}
 
-	pub trait MultiSampleCountType: SampleCountType { }
-	
+	pub trait MultiSampleCountType: SampleCountType {}
+
 	macro_rules! sample {
 		($name:ident, $val:ident, multi) => {
 			sample!($name, $val);
 
-			impl MultiSampleCountType for $name { }
+			impl MultiSampleCountType for $name {}
 		};
 		($name:ident, $val:ident) => {
 			pub struct $name;
-	
+
 			unsafe impl SampleCountType for $name {
-				fn as_raw() -> vk::SampleCountFlags { vk::SampleCountFlags::$val }
+				fn as_raw() -> vk::SampleCountFlags {
+					vk::SampleCountFlags::$val
+				}
 			}
 		};
 	}
-	
+
 	sample!(SampleCount1, TYPE_1);
 	sample!(SampleCount2, TYPE_2, multi);
 	sample!(SampleCount4, TYPE_4, multi);

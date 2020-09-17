@@ -7,7 +7,10 @@ use rk::{
 };
 
 use crate::{
-	image::{usage, samples::{SampleCount1}, SampleCountType, MultiSampleCountType, DynImageUsage, FormatType, Image, ImageView},
+	image::{
+		samples::SampleCount1, usage, DynImageUsage, FormatType, Image, ImageView, MultiSampleCountType,
+		SampleCountType,
+	},
 	math::*,
 	Context, MarsResult,
 };
@@ -92,10 +95,10 @@ fn get_render_pass_desc<G: RenderPassPrototype>() -> (Vec<pass::Attachment>, Vec
 	}
 
 	let subpass = pass::Subpass {
-			input_attachments: input_refs,
-			color_attachments: color_refs,
-			depth_stencil_attachment: depth_ref,
-		};
+		input_attachments: input_refs,
+		color_attachments: color_refs,
+		depth_stencil_attachment: depth_ref,
+	};
 
 	(attachments, vec![subpass], Vec::new())
 }
@@ -247,7 +250,10 @@ impl<F> ColorAttachment<F>
 where
 	F: FormatType,
 {
-	pub(crate) fn new(image: Image<usage::ColorAttachment, F, SampleCount1>, view: ImageView<usage::ColorAttachment, F, SampleCount1>) -> Self {
+	pub(crate) fn new(
+		image: Image<usage::ColorAttachment, F, SampleCount1>,
+		view: ImageView<usage::ColorAttachment, F, SampleCount1>,
+	) -> Self {
 		Self { image, view }
 	}
 }
@@ -282,17 +288,6 @@ where
 		(self.view.image_view.clone(), None)
 	}
 
-	/* fn clear(&self, color: Vec4) -> (vk::ClearValue, Option<vk::ClearValue>) {
-		(
-			vk::ClearValue {
-				color: vk::ClearColorValue {
-					float32: [color.x, color.y, color.z, color.w],
-				},
-			},
-			None,
-		)
-	} */
-
 	fn create(context: &Context, usage: DynImageUsage, extent: vk::Extent2D) -> MarsResult<Self> {
 		let mut image = Image::create(context, usage | DynImageUsage::COLOR_ATTACHMENT, extent)?;
 		image.transition(
@@ -323,10 +318,15 @@ pub struct MultisampledColorAttachment<F: FormatType, S: MultiSampleCountType> {
 	pub resolve_image_view: ImageView<usage::ColorAttachment, F, SampleCount1>,
 }
 
-unsafe impl<F, S> ColorAttachmentType<S> for MultisampledColorAttachment<F, S> where F: FormatType, F::Pixel: ColorClearValue, S: MultiSampleCountType {
-    type ClearValue = F::Pixel;
+unsafe impl<F, S> ColorAttachmentType<S> for MultisampledColorAttachment<F, S>
+where
+	F: FormatType,
+	F::Pixel: ColorClearValue,
+	S: MultiSampleCountType,
+{
+	type ClearValue = F::Pixel;
 
-    fn desc() -> (pass::Attachment, Option<pass::Attachment>) {
+	fn desc() -> (pass::Attachment, Option<pass::Attachment>) {
 		assert!(F::aspect().contains(vk::ImageAspectFlags::COLOR));
 
 		(
@@ -351,14 +351,17 @@ unsafe impl<F, S> ColorAttachmentType<S> for MultisampledColorAttachment<F, S> w
 				final_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
 			}),
 		)
-    }
+	}
 
-    fn as_raw(&self) -> (Arc<RkImageViewInner>, Option<Arc<RkImageViewInner>>) {
-        (self.color_image_view.image_view.clone(), Some(self.resolve_image_view.image_view.clone()))
-    }
+	fn as_raw(&self) -> (Arc<RkImageViewInner>, Option<Arc<RkImageViewInner>>) {
+		(
+			self.color_image_view.image_view.clone(),
+			Some(self.resolve_image_view.image_view.clone()),
+		)
+	}
 
-    fn create(context: &Context, usages: DynImageUsage, extent: vk::Extent2D) -> MarsResult<Self> {
-        let mut color_image = Image::create(context, usages | DynImageUsage::COLOR_ATTACHMENT, extent)?;
+	fn create(context: &Context, usages: DynImageUsage, extent: vk::Extent2D) -> MarsResult<Self> {
+		let mut color_image = Image::create(context, usages | DynImageUsage::COLOR_ATTACHMENT, extent)?;
 		color_image.transition(
 			context,
 			&ImageLayoutTransition {
@@ -386,7 +389,10 @@ unsafe impl<F, S> ColorAttachmentType<S> for MultisampledColorAttachment<F, S> w
 				new_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
 			},
 		)?;
-		let resolve_image = resolve_image.cast_usage(usage::ColorAttachment).map_err(|_| ()).unwrap();
+		let resolve_image = resolve_image
+			.cast_usage(usage::ColorAttachment)
+			.map_err(|_| ())
+			.unwrap();
 		let resolve_image_view = ImageView::create(&resolve_image)?;
 		Ok(Self {
 			color_image,
@@ -394,7 +400,7 @@ unsafe impl<F, S> ColorAttachmentType<S> for MultisampledColorAttachment<F, S> w
 			resolve_image,
 			resolve_image_view,
 		})
-    }
+	}
 }
 
 pub unsafe trait ColorAttachments<S: SampleCountType>: Sized {
@@ -403,8 +409,6 @@ pub unsafe trait ColorAttachments<S: SampleCountType>: Sized {
 	fn desc() -> Vec<(pass::Attachment, Option<pass::Attachment>)>;
 
 	fn as_raw(&self) -> Vec<(Arc<RkImageViewInner>, Option<Arc<RkImageViewInner>>)>;
-
-	//fn clears(&self, color: Vec4) -> Vec<(vk::ClearValue, Option<vk::ClearValue>)>;
 
 	fn create(context: &Context, usages: DynImageUsage, extent: vk::Extent2D) -> MarsResult<Self>;
 }
@@ -419,10 +423,6 @@ unsafe impl<S: SampleCountType> ColorAttachments<S> for () {
 	fn as_raw(&self) -> Vec<(Arc<RkImageViewInner>, Option<Arc<RkImageViewInner>>)> {
 		Vec::new()
 	}
-
-	/* fn clears(&self, _color: Vec4) -> Vec<(vk::ClearValue, Option<vk::ClearValue>)> {
-		Vec::new()
-	} */
 
 	fn create(_context: &Context, _usages: DynImageUsage, _extent: vk::Extent2D) -> MarsResult<Self> {
 		Ok(())
@@ -443,10 +443,6 @@ where
 	fn as_raw(&self) -> Vec<(Arc<RkImageViewInner>, Option<Arc<RkImageViewInner>>)> {
 		vec![self.0.as_raw()]
 	}
-
-	/* fn clears(&self, color: Vec4) -> Vec<(vk::ClearValue, Option<vk::ClearValue>)> {
-		vec![self.0.clear(color)]
-	} */
 
 	fn create(context: &Context, usages: DynImageUsage, extent: vk::Extent2D) -> MarsResult<Self> {
 		Ok((A::create(context, usages, extent)?,))
@@ -469,10 +465,6 @@ where
 		vec![self.0.as_raw(), self.1.as_raw()]
 	}
 
-	/* fn clears(&self, color: Vec4) -> Vec<(vk::ClearValue, Option<vk::ClearValue>)> {
-		vec![self.0.clear(color), self.1.clear(color)]
-	} */
-
 	fn create(context: &Context, usages: DynImageUsage, extent: vk::Extent2D) -> MarsResult<Self> {
 		Ok((A::create(context, usages, extent)?, B::create(context, usages, extent)?))
 	}
@@ -492,7 +484,10 @@ pub unsafe trait DepthAttachmentType<S: SampleCountType>: Sized {
 
 pub struct NoDepthAttachment;
 
-unsafe impl<S> DepthAttachmentType<S> for NoDepthAttachment where S: SampleCountType {
+unsafe impl<S> DepthAttachmentType<S> for NoDepthAttachment
+where
+	S: SampleCountType,
+{
 	type ClearValue = ();
 
 	fn desc() -> Option<pass::Attachment> {
@@ -520,7 +515,7 @@ pub struct DepthAttachment<F: FormatType, S: SampleCountType> {
 impl<F, S> DepthAttachment<F, S>
 where
 	F: FormatType,
-	S: SampleCountType
+	S: SampleCountType,
 {
 	pub(crate) fn new(
 		image: Image<usage::DepthStencilAttachment, F, S>,

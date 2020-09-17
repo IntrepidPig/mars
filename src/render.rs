@@ -62,14 +62,12 @@ impl RenderEngine {
 		})
 	}
 
-	pub fn pass<F: FunctionPrototype>(
+	pub fn pass<'a, F: FunctionPrototype + 'a, I: IntoIterator<Item = DrawArgs<'a, F>>>(
 		&mut self,
 		context: &Context,
 		target: &mut Target<F::RenderPass>,
 		function: &FunctionDef<F>,
-		bindings: &ArgumentsContainer<F>,
-		vertices: &Buffer<VertexBufferUsage, [F::VertexInput]>,
-		indices: &Buffer<IndexBufferUsage, [u32]>,
+		draws: I,
 	) -> MarsResult<()> {
 		self.submit(context, |_this, command_buffer| {
 			unsafe {
@@ -98,10 +96,12 @@ impl RenderEngine {
 					},
 				});
 				command_buffer.bind_pipeline(vk::PipelineBindPoint::GRAPHICS, &function.pipeline);
-				command_buffer.bind_descriptor_set(&function.pipeline_layout, &bindings.descriptor_set);
-				command_buffer.bind_vertex_buffers(0, &[&vertices.buffer], &[0]);
-				command_buffer.bind_index_buffer(&indices.buffer, 0, vk::IndexType::UINT32);
-				command_buffer.draw_indexed(indices.len as u32, 1, 0, 0, 0);
+				for draw in draws {
+					command_buffer.bind_descriptor_set(&function.pipeline_layout, &draw.bindings.descriptor_set);
+					command_buffer.bind_vertex_buffers(0, &[&draw.vertices.buffer], &[0]);
+					command_buffer.bind_index_buffer(&draw.indices.buffer, 0, vk::IndexType::UINT32);
+					command_buffer.draw_indexed(draw.indices.len as u32, 1, 0, 0, 0);
+				}
 				command_buffer.end_render_pass();
 			}
 
@@ -129,3 +129,45 @@ impl RenderEngine {
 		Ok(())
 	}
 }
+
+pub struct DrawArgs<'a, F: FunctionPrototype> {
+	pub bindings: &'a ArgumentsContainer<F>,
+	pub vertices: &'a Buffer<VertexBufferUsage, [F::VertexInput]>,
+	pub indices: &'a Buffer<IndexBufferUsage, [u32]>,
+}
+
+impl<'a, F>
+	From<(
+		&'a ArgumentsContainer<F>,
+		&'a Buffer<VertexBufferUsage, [F::VertexInput]>,
+		&'a Buffer<IndexBufferUsage, [u32]>,
+	)> for DrawArgs<'a, F>
+where
+	F: FunctionPrototype,
+{
+	fn from(
+		t: (
+			&'a ArgumentsContainer<F>,
+			&'a Buffer<VertexBufferUsage, [F::VertexInput]>,
+			&'a Buffer<IndexBufferUsage, [u32]>,
+		),
+	) -> Self {
+		Self {
+			bindings: t.0,
+			vertices: t.1,
+			indices: t.2,
+		}
+	}
+}
+
+impl<'a, F> Clone for DrawArgs<'a, F> where F: FunctionPrototype {
+	fn clone(&self) -> Self {
+		Self {
+			bindings: self.bindings,
+			vertices: self.vertices,
+			indices: self.indices,
+		}
+	}
+}
+
+impl<'a, F> Copy for DrawArgs<'a, F> where F: FunctionPrototype { }

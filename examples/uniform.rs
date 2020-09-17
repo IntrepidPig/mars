@@ -5,7 +5,7 @@ use mars::{
 	function::{FunctionDef, FunctionImpl, FunctionPrototype},
 	image::{format, usage, DynImageUsage, SampleCount1},
 	math::*,
-	pass::{Attachments, DepthAttachment, RenderPass, RenderPassPrototype, ColorAttachment},
+	pass::{Attachments, ColorAttachment, DepthAttachment, RenderPass, RenderPassPrototype},
 	target::Target,
 	window::WindowEngine,
 	Context,
@@ -134,27 +134,14 @@ fn main() {
 			.render
 			.clear(&context, &mut target, (Vec4::new(1.0, 1.0, 1.0, 1.0),), 1.0)
 			.unwrap();
+
+		let draws = [
+			(&set_a, &vertex_buffer, &index_buffer).into(),
+			(&set_b, &vertex_buffer, &index_buffer).into(),
+		];
 		window_engine
 			.render
-			.pass(
-				&context,
-				&mut target,
-				&function_def,
-				&set_a,
-				&vertex_buffer,
-				&index_buffer,
-			)
-			.unwrap();
-		window_engine
-			.render
-			.pass(
-				&context,
-				&mut target,
-				&function_def,
-				&set_b,
-				&vertex_buffer,
-				&index_buffer,
-			)
+			.pass(&context, &mut target, &function_def, draws.iter().copied())
 			.unwrap();
 
 		if let Some(new_extent) = window_engine

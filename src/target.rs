@@ -44,12 +44,8 @@ impl<G: RenderPassPrototype> Target<G> {
 		attachments: &Attachments<G>,
 	) -> MarsResult<Framebuffer> {
 		let extent = attachments.extent();
-		context.device.create_framebuffer(
-			render_pass,
-			attachments.as_raw(),
-			extent.width,
-			extent.height,
-			1,
-		)
+		context
+			.device
+			.create_framebuffer(render_pass, attachments.as_raw(), extent.width, extent.height, 1)
 	}
 }

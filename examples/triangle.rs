@@ -1,7 +1,7 @@
 use mars::{
 	buffer::Buffer,
 	function::{FunctionDef, FunctionImpl, FunctionPrototype},
-	image::{format, usage, SampleCount1, DynImageUsage},
+	image::{format, usage, DynImageUsage, SampleCount1},
 	math::*,
 	pass::{Attachments, ColorAttachment, NoDepthAttachment, RenderPass, RenderPassPrototype},
 	target::Target,
@@ -93,17 +93,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 			.render
 			.clear(&context, &mut target, (Vec4::new(1.0, 1.0, 1.0, 1.0),), ())
 			.unwrap();
+
 		window_engine
 			.render
-			.pass(
-				&context,
-				&mut target,
-				&function_def,
-				&set,
-				&vertex_buffer,
-				&index_buffer,
-			)
+			.pass(&context, &mut target, &function_def, [(&set, &vertex_buffer, &index_buffer).into()].iter().copied())
 			.unwrap();
+
 		if let Some(new_extent) = window_engine
 			.present(
 				&context,

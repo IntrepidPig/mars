@@ -3,7 +3,7 @@ use std::time::Instant;
 use mars::{
 	buffer::Buffer,
 	function::{FunctionDef, FunctionImpl, FunctionPrototype},
-	image::{format, usage, DynImageUsage, Image, SampledImage, samples::{SampleCount8}},
+	image::{format, samples::SampleCount8, usage, DynImageUsage, Image, SampledImage},
 	math::*,
 	pass::{Attachments, MultisampledColorAttachment, NoDepthAttachment, RenderPass, RenderPassPrototype},
 	target::Target,
@@ -141,9 +141,7 @@ fn main() {
 				&context,
 				&mut target,
 				&function_def,
-				&set,
-				&vertex_buffer,
-				&index_buffer,
+				[(&set, &vertex_buffer, &index_buffer).into()].iter().copied(),
 			)
 			.unwrap();
 

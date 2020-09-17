@@ -3,9 +3,9 @@ use std::time::Instant;
 use mars::{
 	buffer::Buffer,
 	function::{FunctionDef, FunctionImpl, FunctionPrototype},
-	image::{format, usage, DynImageUsage, samples::{SampleCount8}},
+	image::{format, samples::SampleCount8, usage, DynImageUsage},
 	math::*,
-	pass::{Attachments, MultisampledColorAttachment, DepthAttachment, RenderPass, RenderPassPrototype},
+	pass::{Attachments, DepthAttachment, MultisampledColorAttachment, RenderPass, RenderPassPrototype},
 	target::Target,
 	window::WindowEngine,
 	Context,
@@ -186,7 +186,7 @@ fn main() {
 		(Vec3::new( 0.5,  0.5,  0.5), Vec3::new( 0.0,  1.0,  0.0)),
 		(Vec3::new( 0.5,  0.5,  0.5), Vec3::new( 0.0,  1.0,  0.0)),
 		(Vec3::new(-0.5,  0.5,  0.5), Vec3::new( 0.0,  1.0,  0.0)),
-		(Vec3::new(-0.5,  0.5, -0.5), Vec3::new(  0.0,  1.0,  0.0)),
+		(Vec3::new(-0.5,  0.5, -0.5), Vec3::new( 0.0,  1.0,  0.0)),
 	];
 	let indices = (0..36).collect::<Vec<_>>();
 	let vertex_buffer = Buffer::make_array_buffer(&context, &vertices).unwrap();
@@ -256,9 +256,7 @@ fn main() {
 				&context,
 				&mut target,
 				&cube_function_def,
-				&cube_arguments,
-				&vertex_buffer,
-				&index_buffer,
+				[(&cube_arguments, &vertex_buffer, &index_buffer).into()].iter().copied(),
 			)
 			.unwrap();
 		window_engine
@@ -267,9 +265,7 @@ fn main() {
 				&context,
 				&mut target,
 				&light_function_def,
-				&light_arguments,
-				&vertex_buffer,
-				&index_buffer,
+				[(&light_arguments, &vertex_buffer, &index_buffer).into()].iter().copied(),
 			)
 			.unwrap();
 

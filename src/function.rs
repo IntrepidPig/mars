@@ -11,8 +11,8 @@ use rk::{
 
 use crate::{
 	buffer::{Buffer, UniformBufferUsage, UntypedBuffer},
-	image::{FormatType, SampledImage, SampleCountType},
-	pass::{RenderPass, RenderPassPrototype, ColorAttachments},
+	image::{FormatType, SampleCountType, SampledImage},
+	pass::{ColorAttachments, RenderPass, RenderPassPrototype},
 	Context, MarsResult,
 };
 
