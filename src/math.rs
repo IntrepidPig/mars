@@ -20,4 +20,8 @@ impl Mvp {
 	pub fn new(model: Mat4, view: Mat4, proj: Mat4) -> Self {
 		Self { model, view, proj }
 	}
+
+	pub fn identity() -> Self {
+		Self::new(Mat4::identity(), Mat4::identity(), Mat4::identity())
+	}
 }
